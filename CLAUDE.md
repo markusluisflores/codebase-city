@@ -2,7 +2,7 @@
 
 Paste a public GitHub repo URL and get a 3D city plus a 2D treemap of its files, coloured by hotspot, churn, age, bug-fix density, language and ownership, with co-change arcs and a report card of files to read first. Portfolio project for full-stack and AI-engineer applications.
 
-Global workflow rules live in `C:\Users\Miko\.claude\CLAUDE.md` and apply here automatically.
+Global workflow rules live in `~/.claude/CLAUDE.md` and apply here automatically.
 
 ## Status
 
@@ -18,6 +18,6 @@ Design phase. Requirements are in `docs/requirements-seed.md` (decisions D1-D7 a
 
 ## Conventions
 
-- Commits follow `C:\Users\Miko\.claude\standards\git-commit-standard.md`.
+- Commits follow `~/.claude/standards/git-commit-standard.md`.
 - Docs in `docs/` use Mermaid for diagrams, never ASCII art.
 - When Markus must run commands, give PowerShell, not bash.
