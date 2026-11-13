@@ -68,6 +68,34 @@ Long-running processes, non-JavaScript stacks, databases in the same project, co
 ### Why we picked Vercel for this project
 $0 idle, strongest isolation for untrusted repos, static gallery fits well, and an explicit goal of exploring a platform not used before. Not because Railway can't do it: Railway can run the same disposable-box design, and plain Railway is less to build.
 
+### Could Railway run the same design? (yes)
+
+The Vercel design (approach B with a per-job Sandbox) maps onto Railway almost one to one:
+
+| Piece | On Vercel | On Railway |
+| ----- | --------- | ---------- |
+| Web app and gallery | Next.js, gallery as static files | Next.js service; gallery served by it |
+| Per-job disposable box | Vercel Sandbox (microVM) | Railway Sandbox: isolated, short-lived Linux VM; create, exec, destroy (reported opt-in beta in July 2026, unverified) |
+| Cache | Marketplace Postgres (for example Neon) | Postgres service in the same project |
+| Idle cost | $0 | Web service uses credit while running; the Serverless setting can sleep it after about 10 minutes idle, with a slow first request (some users report failures; unverified) |
+| Network for the box | Policy can be restricted | Outbound-only by default; can join the private network, which Railway advises against for untrusted code |
+| Fallback without sandboxes | None needed | Plain B (git as a child process), or a second secret-free service (always on, shared disk across jobs, so weaker isolation) |
+
+A Railway caveat: the older Serverless reference says private networking does not work with sleeping, which matters if the web service calls a separate ingest service. Check before relying on that combination.
+
+### How to justify the choice in an interview
+
+An honest, defensible answer, in order of weight:
+
+1. **The technical fit was equal.** Both platforms can run a disposable box per job. I did not choose Vercel because Railway couldn't do it.
+2. **Cost shape.** Vercel Hobby is $0 idle with a hard cap; at 3 to 5 demos a month I'd use a small share of every allowance. Railway would use credit for an always-on web service.
+3. **Consolidation.** The only live Railway service is the Fourth Official, a Next.js app, and wedding-invitation is already documented on Vercel. Moving it could end the $5 plan. Not done yet.
+4. **Learning goal.** I chose a platform I hadn't used for this workload, to broaden what I can talk about.
+5. **Trade-off I accepted.** More code (create, wait, collect, clean up) and a newer product with limits I hadn't verified, so a spike gates the dependency, with Railway as the fallback.
+6. **What would have made me pick Railway.** If chat-app or FrontRow came back (workers, Redis, Spring Boot), or if the spike failed, or if I wanted the least code to ship in a week.
+
+**Interview talking point:** "Either platform could run the design, so I decided on cost shape, consolidation and what I wanted to learn, not on capability. I kept the git logic a plain module, so if the Sandbox spike failed, moving to Railway would be a small change."
+
 ---
 
 ## 4. Technical concepts
