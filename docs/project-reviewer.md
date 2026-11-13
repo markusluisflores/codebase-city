@@ -19,11 +19,19 @@ Nothing yet. The plan: paste a public GitHub repo URL and get a 3D city plus a 2
 | Git analysis | Plain TypeScript module, run inside a Vercel Sandbox | Planned; Sandbox spike outstanding |
 | Database / cache | Postgres via a Vercel Marketplace partner (for example Neon) | Planned, not chosen |
 | Front end | Next.js with Three.js and a 2D treemap | Planned, not confirmed |
-| Password gate on live analysis, public gallery of cached cities | Discussed; Markus said "that's fair" but hadn't confirmed it for the design | Open |
+| Public gallery of cached cities; adding a new repo is password-protected | Decided 2026-11-13 (Markus: "make it public, while the adding of repos password protected") | Decided; tier question for the design still open |
 
 ---
 
 ## 3. Hosting: Vercel vs Railway
+
+### Which build approach is Vercel? (A, B or C from the design discussion)
+
+* **A:** web app plus a separate always-on worker with a queue (BullMQ, Redis).
+* **B:** one deployable app that does the git work itself, no queue or separate worker.
+* **C:** client-only, GitHub API from the browser (rejected: rate limits make per-file history impossible).
+
+The Vercel design is **B-shaped (ADR-001 calls it B3)**: one Next.js app, no queue, no Redis, no standing worker service. The difference from plain B is where git runs: in a disposable Sandbox microVM created per job, instead of a child process in the web server. A Sandbox does play the role of a worker, but it lives only for one job, so there is nothing to keep running or to put a queue in front of. It is not C, because git runs server-side.
 
 ### Side by side
 
@@ -104,7 +112,7 @@ $0 idle, strongest isolation for untrusted repos, static gallery fits well, and 
 
 **Interview talking point:** "I don't treat either provider as safe by default. Both had incidents this year, so I minimise the secrets each holds, mark them sensitive, and know where every secret lives so rotation is a checklist, not a hunt."
 
-### 6. Gallery plus password gate (open, not confirmed)
+### 6. Public gallery plus a password gate on adding repos (decided)
 
 **Simple version:** a museum with two doors. One is open and shows finished cities. The other, to analyse a new repo, needs a password.
 
@@ -136,7 +144,7 @@ None yet. One early lesson: an assumption about "which projects are deployed whe
 | How did you decide how to read git history? | Concept 3 |
 | What does this cost to run, and what happens if it gets popular? | Concept 4 and concept 6 |
 | What would make you switch? | ADR-001, "What would change this decision" |
-| What's still unproven? | Sandbox spike (start-up time and limits), Hobby terms, whether the gate and gallery are in scope |
+| What's still unproven? | Sandbox spike (start-up time and limits), Hobby terms, and whether a shared demo password counts as auth under the tiering |
 
 ## 8. Sources
 
