@@ -92,7 +92,7 @@ An honest, defensible answer, in order of weight:
 3. **Consolidation.** The Fourth Official, a Next.js app, is the only Railway service known to be live (chat-app's worker and Redis have an unknown running state; see the workspace deployed-services file), and wedding-invitation is already documented on Vercel. Moving it could end the $5 plan. Not done yet.
 4. **Learning goal.** I chose a platform I hadn't used for this workload, to broaden what I can talk about.
 5. **Trade-off I accepted.** More code (create, wait, collect, clean up) and a newer product; a spike gated the dependency and passed (2026-11-14), with Railway as the fallback if that ever changes.
-6. **What would have made me pick Railway.** If chat-app or FrontRow came back (workers, Redis, Spring Boot), or if the spike failed, or if I wanted the least code to ship in a week.
+6. **What would have made me pick Railway.** If chat-app or FrontRow came back (workers, Redis, Spring Boot), or if the spike had failed, or if I wanted the least code to ship in a week.
 
 **Interview talking point:** "Either platform could run the design, so I decided on cost shape, consolidation and what I wanted to learn, not on capability. I kept the git logic a plain module, so if Sandbox ever stopped fitting (the spike passed on 2026-11-14), moving to Railway would be a small change."
 
