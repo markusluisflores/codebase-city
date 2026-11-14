@@ -146,6 +146,8 @@ An honest, defensible answer, in order of weight:
 
 **The longer version:** the gallery is static JSON built ahead of time, so a view is about 1 to 3 MB of transfer (estimate) and no server work; 100 GB of Hobby bandwidth is about 30,000 views. The password gate protects the costly path from bots and strangers and could reuse the `DEMO_PASSWORD` and `SESSION_SECRET` pattern from the Fourth Official. It raises a tier question: the global tiering lists auth as Mandatory, so the design should decide whether a shared demo password counts.
 
+**Privacy note:** author keys in the data are pseudonymous: an unsalted 12-character hash of an email can be matched against a known address, so never describe them as anonymised or as "no personal data". Display names containing `@` are cut at the `@`, and visitor IPs for the login limit are kept only as keyed hashes for up to an hour.
+
 **Interview talking point:** "Anyone can fly through pre-analysed cities for free. Pasting a new repo, the expensive and riskier part, is behind a shared password, which keeps costs and exposure bounded."
 
 ---
