@@ -104,7 +104,7 @@ Pieces:
 
 **`Analysis` shape (schema-versioned JSON)**
 - `repo` (owner, name, head SHA, default branch), `window` (from, to, commits counted), `stats` (bug-fix commit share, bot commits excluded, caps hit).
-- `files[]`: path, size, language (from extension), `changes`, `lastChanged`, `bugFixes`, top authors with shares, main author, `coChange[]` (up to 5: path, shared commits, score).
+- `files[]`: path, size, language (from extension), `changes`, `lastChanged`, `bugFixes`, top authors with shares (each a hashed key, a display name and a share; **no email address is ever stored or served**, and no commit message beyond the bug-fix count), main author, `coChange[]` (up to 5: path, shared commits, score).
 - `report`: `readFirst[]`, `riskiest[]`, `forgotten[]` (10 each, computed server-side so they are deterministic and unit-testable).
 - Folders are derived in the browser from file paths.
 
@@ -115,7 +115,7 @@ Pieces:
 - **Age/staleness:** time since last change, bucketed.
 - **Bug-fix density:** commits touching the file whose subject matches `\b(fix(es|ed)?|bug|hotfix|regression|crash|defect)\b` (case-insensitive), excluding subjects matching `typo|lint|format|whitespace|docs?:`; density is bug-fixes divided by changes, shown only for files with at least 3 changes. The UI shows the repo-wide match rate so the noise is visible.
 - **Co-change:** only commits touching 30 files or fewer, only files that exist at HEAD, only files with at least 3 changes. Score is shared commits divided by commits touching either file (Jaccard); keep pairs with at least 3 shared commits and score of at least 0.3, top 5 per file.
-- **Ownership:** main author is the one with the most commits touching the file in the window. Authors are keyed by lowercased email, with GitHub's `<id>+<name>@users.noreply.github.com` form reduced to `<name>@users.noreply.github.com`. `.mailmap` is applied if the spike shows the extra fetch is cheap, otherwise it is off and the UI says aliases are not merged. Names matching `[bot]`, dependabot, renovate or github-actions are excluded. A district is flagged **single-owner** when one author holds at least 80% of file-touches in it and it has at least 5 changes.
+- **Ownership:** main author is the one with the most commits touching the file in the window. Authors are identified by lowercased email, with GitHub's `<id>+<name>@users.noreply.github.com` form reduced to `<name>@users.noreply.github.com`, but the stored key is only the first 12 hex characters of the SHA-256 of that normalised email, shown with the author's most frequent display name. This is pseudonymisation, not anonymity: names still appear, and a known email can be matched to a key. **(Markus, 2026-11-13: hash them.)** `.mailmap` is applied if the spike shows the extra fetch is cheap, otherwise it is off and the UI says aliases are not merged. Names matching `[bot]`, dependabot, renovate or github-actions are excluded. A district is flagged **single-owner** when one author holds at least 80% of file-touches in it and it has at least 5 changes.
 - **Report card:** read-first = 0.5 rank(changes) + 0.3 rank(co-change degree) + 0.2 rank(distinct authors); riskiest = hotspot times bug-fix density (files under 3 changes excluded); forgotten = files with no commit in the window ranked by size, largest first, then files whose last in-window change is the oldest, only files above the median size. Ties are broken by size, then path.
 
 ## 9. Rendering
@@ -164,4 +164,4 @@ Sandbox job mechanics beyond what the spike shows; Postgres partner; Three.js wr
 11. Shallow clone bounded by the window, boundary commits dropped; truncated tree is a hard reject; viewer route only reads the cache.
 12. Files with no commits in the window stay in the city in neutral grey; "forgotten" ranks them by size.
 13. Gallery JSON is committed and regenerated on a schema bump, enforced by a test; the gallery build is a local clone, sharing only the ingestion module.
-14. Author key is lowercased email with the GitHub noreply form reduced; `.mailmap` only if cheap.
+14. Author identity is the lowercased email with the GitHub noreply form reduced; `.mailmap` only if cheap. Only a 12-character hash of it is stored, plus a display name (Markus's decision).

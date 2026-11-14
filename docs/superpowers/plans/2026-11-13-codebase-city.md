@@ -19,6 +19,7 @@
 - Caps (starting values): repo size 1 GB by API, 20,000 commits in window, 20,000 files at HEAD, 5,000 rendered buildings, 240 s analysis wall clock, 10 live analyses a day and 60 a month. A truncated GitHub tree is a hard reject.
 - Heuristic thresholds exactly as spec section 8 (bug-fix regex, at least 3 changes for density, co-change: at most 30 files per commit, at least 3 shared commits, Jaccard at least 0.3, top 5 per file; single-owner district at least 80% of file-touches and at least 5 changes).
 - Every heuristic is labelled as a heuristic in the UI. No verdict on whether a repo is "well built".
+- No author email address is stored in Postgres, the gallery JSON or any API response (hashed key plus display name only); commit messages are never stored beyond the bug-fix count.
 - No secret in the repo. `DEMO_PASSWORD`, `SESSION_SECRET`, `GITHUB_TOKEN`, database URL are sensitive Vercel variables. No local device path in any committed file.
 - Commits follow `~/.claude/standards/git-commit-standard.md`. Never commit to `main`; branches per section "Branches" below.
 - Docs diagrams use Mermaid. Tests never touch the network.
@@ -107,9 +108,9 @@ Needs a Vercel account and a Marketplace Postgres; Markus creates them and suppl
 
 **Files:** Create `lib/analysis/types.ts`, `lib/analysis/schema.ts`; Test `tests/analysis/schema.test.ts`.
 
-**Interfaces:** Produces `type Analysis`, `type FileStat`, `type CoChange`, `type Report`, `const SCHEMA_VERSION: number`, `analysisSchema` (zod), `parseAnalysis(json: unknown): Analysis` (throws on invalid). `FileStat`: `path, size, language, changes, lastChanged (unix seconds or null for older than window), bugFixes, authors: {key,share}[], mainAuthor: string|null, mainAuthorShare, coChange: CoChange[]`. `CoChange`: `{path, shared, score}`.
+**Interfaces:** Produces `type Analysis`, `type FileStat`, `type CoChange`, `type Report`, `const SCHEMA_VERSION: number`, `analysisSchema` (zod), `parseAnalysis(json: unknown): Analysis` (throws on invalid). `FileStat`: `path, size, language, changes, lastChanged (unix seconds or null for older than window), bugFixes, authors: {key,name,share}[] (`key` is a 12-hex-character hash, never an email), mainAuthor: string|null, mainAuthorShare, coChange: CoChange[]`. `CoChange`: `{path, shared, score}`.
 
-- [ ] **Step 1:** Write failing tests: a valid sample parses; missing `schemaVersion` throws; negative size throws; `coChange` longer than 5 throws; a file with `lastChanged: null` is valid.
+- [ ] **Step 1:** Write failing tests: an author `key` that is not 12 hex characters (for example an email) is rejected; a valid sample parses; missing `schemaVersion` throws; negative size throws; `coChange` longer than 5 throws; a file with `lastChanged: null` is valid.
 - [ ] **Step 2:** Implement the types and schema; run tests to pass; commit `feat(analysis): add Analysis schema with validation`.
 
 ### Task 3: Fixture repo builder
@@ -134,9 +135,9 @@ Needs a Vercel account and a Marketplace Postgres; Markus creates them and suppl
 
 **Files:** Create `lib/ingest/metrics.ts`; Test `tests/ingest/metrics.test.ts`.
 
-**Interfaces:** Produces `isBugFix(subject: string): boolean`, `isBot(name: string, email: string): boolean`, `authorKey(email: string): string`, `languageOf(path: string): string`, `computeFileStats(commits: Commit[], head: {path:string; size:number}[], windowFromUnix: number): FileStat[]` (without `coChange`).
+**Interfaces:** Produces `isBugFix(subject: string): boolean`, `isBot(name: string, email: string): boolean`, `normaliseEmail(email: string): string`, `authorKey(email: string): string` (first 12 hex characters of the SHA-256 of the normalised email), `languageOf(path: string): string`, `computeFileStats(commits: Commit[], head: {path:string; size:number}[], windowFromUnix: number): FileStat[]` (without `coChange`).
 
-- [ ] **Step 1:** Failing tests: `isBugFix` true for "Fix crash on empty input", "fixes #12", "hotfix: login", false for "fix typo in README", "lint fixes", "docs: fix link", "prefix handling" (word boundary); `authorKey` lowercases and turns `123+jane@users.noreply.github.com` into `jane@users.noreply.github.com`; `isBot` true for `dependabot[bot]` and `renovate`; `computeFileStats` counts changes and bug-fixes only inside the window, excludes bot commits from authors, sets `lastChanged: null` for files with no in-window commit, still lists those files, yields `mainAuthor: null` when no author. One author and all-equal values must not throw (Review Focus 5).
+- [ ] **Step 1:** Failing tests: `isBugFix` true for "Fix crash on empty input", "fixes #12", "hotfix: login", false for "fix typo in README", "lint fixes", "docs: fix link", "prefix handling" (word boundary); `normaliseEmail` lowercases and turns `123+jane@users.noreply.github.com` into `jane@users.noreply.github.com`; `authorKey` is 12 hex characters, equal for `Jane@X.com` and `jane@x.com`, and never contains the email; the serialised `computeFileStats` output contains no `@` from any author email (privacy check); `isBot` true for `dependabot[bot]` and `renovate`; `computeFileStats` counts changes and bug-fixes only inside the window, excludes bot commits from authors, sets `lastChanged: null` for files with no in-window commit, still lists those files, yields `mainAuthor: null` when no author. One author and all-equal values must not throw (Review Focus 5).
 - [ ] **Step 2:** Implement; run tests; commit `feat(ingest): compute churn, bug-fix and ownership per file`.
 
 ### Task 6: Co-change
