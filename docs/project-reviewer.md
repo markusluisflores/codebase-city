@@ -16,7 +16,7 @@ Nothing yet. The plan: paste a public GitHub repo URL and get a 3D city plus a 2
 | Layer | Choice | Status |
 | ----- | ------ | ------ |
 | Hosting | Vercel (ADR-001) | Decided 2026-11-13 |
-| Git analysis | Plain TypeScript module, run inside a Vercel Sandbox | Planned; Sandbox spike outstanding |
+| Git analysis | Plain TypeScript module, run inside a Vercel Sandbox | Planned; Sandbox spike passed 2026-11-14 |
 | Database / cache | Postgres via a Vercel Marketplace partner (for example Neon) | Planned, not chosen |
 | Front end | Next.js with Three.js and a 2D treemap | Decided in the design (2026-11-13) |
 | Access model | Public gallery of cached cities; adding a new repo is password-protected | Decided 2026-11-13 (Markus: "make it public, while the adding of repos password protected"); tier is Standard (confirmed by Markus 2026-11-13), with a security review on the ingestion boundary and the gate |
@@ -91,7 +91,7 @@ An honest, defensible answer, in order of weight:
 2. **Cost shape.** Vercel Hobby is $0 idle with a hard cap; at 3 to 5 demos a month I'd use a small share of every allowance. Railway would use credit for an always-on web service.
 3. **Consolidation.** The Fourth Official, a Next.js app, is the only Railway service known to be live (chat-app's worker and Redis have an unknown running state; see the workspace deployed-services file), and wedding-invitation is already documented on Vercel. Moving it could end the $5 plan. Not done yet.
 4. **Learning goal.** I chose a platform I hadn't used for this workload, to broaden what I can talk about.
-5. **Trade-off I accepted.** More code (create, wait, collect, clean up) and a newer product with limits I hadn't verified, so a spike gates the dependency, with Railway as the fallback.
+5. **Trade-off I accepted.** More code (create, wait, collect, clean up) and a newer product; a spike gated the dependency and passed (2026-11-14), with Railway as the fallback if that ever changes.
 6. **What would have made me pick Railway.** If chat-app or FrontRow came back (workers, Redis, Spring Boot), or if the spike failed, or if I wanted the least code to ship in a week.
 
 **Interview talking point:** "Either platform could run the design, so I decided on cost shape, consolidation and what I wanted to learn, not on capability. I kept the git logic a plain module, so if the Sandbox spike failed, moving to Railway would be a small change."
@@ -174,7 +174,7 @@ None yet. One early lesson: an assumption about "which projects are deployed whe
 | How did you decide how to read git history? | Concept 3 |
 | What does this cost to run, and what happens if it gets popular? | Concept 4 and concept 6 |
 | What would make you switch? | ADR-001, "What would change this decision" |
-| What's still unproven? | Sandbox spike (start-up time, limits, whether a background continuation can run 240 s, egress policy) and Hobby terms. Settled: the tier is Standard, confirmed by Markus on 2026-11-13, with a security review on the gate |
+| What's still unproven? | The 8 MB analysis size bound (re-measured in Task 8 or 9), and untested corners of the spike (Fluid compute off, the 300 s limit itself, git clone under the network policy). Settled by the 2026-11 spike: start-up 0.52 s, limits, a continuation to 270 s, egress policy, Hobby terms (personal or non-commercial). Settled: the tier is Standard, confirmed by Markus on 2026-11-13, with a security review on the gate |
 
 ## 8. Sources
 

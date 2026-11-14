@@ -1,7 +1,7 @@
 # ADR-001: Host Codebase City on Vercel (web app plus Sandbox for git work)
 
 **Date:** 2026-11-13
-**Status:** Accepted (one verification outstanding: the Sandbox spike, see Consequences)
+**Status:** Accepted (Sandbox spike passed 2026-11-14; the 8 MB analysis size bound is still unconfirmed, see Consequences)
 
 ## Context and Problem Statement
 
