@@ -35,7 +35,7 @@ Codebase City analyses a public GitHub repo by cloning it and reading `git log`.
 * ✅ Possible later consolidation: `the-fourth-official` (Next.js) could move too, ending the $5 Railway plan. Not decided.
 * ⚠️ Extra code: create a Sandbox, wait, collect output, clean up. Railway B1 needs none of this.
 * ⚠️ Sandbox is a newer product. Hobby limits and start-up latency were checked in the 2026-11 spike (`docs/spikes/2026-11-sandbox-spike.md`): 5 Active CPU hours a month, 10 concurrent sandboxes, 45-minute sessions (Vercel docs), start-up 0.52 s median.
-* ✅ **Spike passed (2026-11-14):** clone and log of express took about 1.2 s inside a Sandbox; no fallback to Railway B1 or B2 is needed. Findings: `docs/spikes/2026-11-sandbox-spike.md`.
+* ✅ **Spike passed (2026-11-14):** clone and log of express took about 1.2 s inside a Sandbox; no fallback to Railway B1 or B2 is needed. One item is unconfirmed: the 8 MB analysis size bound, re-measured in Task 8 or 9. Findings: `docs/spikes/2026-11-sandbox-spike.md`.
 * ⚠️ Vercel's terms restrict Hobby to personal or non-commercial use (read in the spike); a portfolio demo fits, revisit if it ever earns money.
 * ⚠️ Two platforms during any transition period if `the-fourth-official` stays on Railway.
 
