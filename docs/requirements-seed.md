@@ -1,7 +1,7 @@
 # Codebase City: Requirements Seed
 
 > **Status:** seed from a brainstorm session on 2026-11-13. **Not an approved design.** It records what was decided and what is still open, so the next session starts from files, not from chat history.
-> **Origin:** idea #1 of 10 in `C:\ClaudeProjects\portfolio-project-ideas.md` (ranked shortlist, rationale and sources are there).
+> **Origin:** idea #1 of 10 in `portfolio-project-ideas.md` at the ClaudeProjects workspace root, `../../portfolio-project-ideas.md` from this file (ranked shortlist, rationale and sources are there).
 > **Next step:** this is the *requirements* half of the brainstorm. The next session still has to lay out the build approaches, get one picked, then write the design doc and get it approved. Per the global workflow, the first branch is `docs/<description>`, and this file should be committed there after `new-project` bootstrap.
 
 Attribution: items marked **(user)** are Markus's decisions or words. Items marked **(proposal)** are my suggestions that he approved or has not yet reviewed. Items marked **(open)** are undecided.
@@ -119,4 +119,4 @@ Attribution: items marked **(user)** are Markus's decisions or words. Items mark
 
 ## 11. Provenance
 
-Derived from the brainstorm session of 2026-11-13. Sources are listed in `C:\ClaudeProjects\portfolio-project-ideas.md` (section 7) and in the links above. Most are blogs or secondary summaries, so treat claims as leads to check.
+Derived from the brainstorm session of 2026-11-13. Sources are listed in `../../portfolio-project-ideas.md` (section 7) and in the links above. Most are blogs or secondary summaries, so treat claims as leads to check.
