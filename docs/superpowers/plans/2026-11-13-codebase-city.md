@@ -1,0 +1,288 @@
+# Codebase City Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Build Codebase City v1: a public gallery of 3D and 2D repo maps coloured by git-history signals, plus a password-protected live analysis of any public GitHub repo, hosted on Vercel.
+
+**Architecture:** One Next.js app on Vercel. A pure TypeScript ingestion module turns raw `git log` text and a file-size map into a schema-validated `Analysis` JSON. Live jobs run that module inside a disposable Vercel Sandbox; the gallery build runs it locally. The browser lays out and renders the `Analysis` (Three.js city, treemap).
+
+**Tech Stack:** Next.js (App Router) and TypeScript strict, Vitest, zod, d3-hierarchy, Three.js, `@vercel/sandbox`, a Marketplace Postgres (Neon preferred), npm. Versions are whatever is current and at least two weeks old at scaffold time, pinned by the lockfile.
+
+**Spec:** `docs/superpowers/specs/2026-11-13-codebase-city-design.md` (approved 2026-11-13). Also read `docs/adr/ADR-001-host-on-vercel.md`.
+
+## Global Constraints
+
+- Hosting is Vercel Hobby. Allowances are hard caps; nothing may rely on a paid plan.
+- Tier is Standard, plus `/security-review` on the ingestion boundary and the gate (Tasks 9 to 12b).
+- No Anthropic API, no AI feature. No repo content is ever checked out or executed. Clone with `--filter=blob:none --no-checkout`, hooks disabled.
+- Window: last 24 months before the repo's latest commit. Git history command uses `--no-merges --no-renames --name-only`; renamed files restart history (state in UI).
+- Caps (starting values): repo size 1 GB by API; 50,000 TOTAL commits (pre-clone, from the GitHub API, code `too_many_commits`); 20,000 commits IN THE WINDOW (post-clone, enforced by the job, code `too_many_commits_in_window`); 10,000 files at HEAD; 5,000 rendered buildings including per-district "other" buildings; 240 s analysis wall clock; 10 live analyses a day and 60 a month. A truncated GitHub tree is a hard reject.
+- Cache: keyed by `(owner, name, schemaVersion)`; each row stores `headSha` and `analysedAt`; a re-analysis replaces the row. The viewer resolves the static gallery JSON, then the Postgres row, else the password prompt, and never calls GitHub or the Sandbox.
+- Heuristic thresholds exactly as spec section 8 (bug-fix regex, at least 3 changes for density, co-change: at most 30 files per commit, at least 3 shared commits, Jaccard at least 0.3, top 5 per file; single-owner district at least 80% of file-touches and at least 5 changes).
+- Every heuristic is labelled as a heuristic in the UI. No verdict on whether a repo is "well built".
+- No author email address is stored in Postgres, the gallery JSON or any API response (a pseudonymised hashed key plus display name only: the unsalted 12-character hash can be matched against a known address, so it is never described as anonymised); a display name containing `@` is cut at the `@`; commit messages are never stored beyond the bug-fix count.
+- No secret in the repo. `DEMO_PASSWORD`, `SESSION_SECRET`, `GITHUB_TOKEN`, database URL are sensitive Vercel variables. No local device path in any committed file.
+- Commits follow `~/.claude/standards/git-commit-standard.md`. Never commit to `main`; branches per section "Branches" below.
+- Docs diagrams use Mermaid. Tests never touch the network.
+- Logs and error responses carry error codes and repo names only, never raw stderr, `rawLog`, commit subjects or visitor IPs. Visitor IPs exist only as keyed hashes for up to an hour (not "no personal data").
+- Repo-derived strings (paths, author names, anything) render only as text; no `dangerouslySetInnerHTML` or `innerHTML` anywhere.
+
+## Review Focus
+
+Inputs the spec implies but no task would otherwise test, most likely to bite first. Each has a test in the named task.
+
+1. **Lockfiles and generated files dominate hotspots** (`package-lock.json`, `*.min.js`, `dist/`, `vendor/`, images). A reasonable person expects them out of the report card. Plan-level call, not in the spec: an ignore list affects the report card and hotspot ranking only; the files still appear in the city. Task 7.
+2. **Paths with spaces, quotes, unicode or newlines** break line-based `git log` parsing. Use `-z` output. Task 4.
+3. **Thin or empty history:** fewer than 20 commits in the window, or zero. Must render with a "thin history" note, not crash or divide by zero. Tasks 5, 7, 15b.
+4. **Repo URL variants and injection:** trailing `.git`, `www.`, `http://`, uppercase, `/tree/main` suffixes, and strings such as `owner/repo;rm -rf` or `--upload-pack=...`. Task 10.
+5. **Degenerate statistics:** all files equal size, all churn equal, one author, a single huge commit. Rank ties and zero-variance cases must give stable, defined output. Tasks 5 to 7.
+
+## Requirement to task map
+
+| Spec requirement | Task |
+| ---------------- | ---- |
+| Hosting risks (Sandbox limits, shallow clone, read-back, mailmap), Vercel project, Postgres, variable names, function file tracing | 0 |
+| Stack, quality baseline, CI | 1 |
+| `Analysis` schema and validation | 2 |
+| Ingestion: log parse, window, boundary commits | 3, 4 |
+| Bug-fix, ownership, churn, age, language | 5 |
+| Co-change | 6 |
+| Hotspot, report card, single-owner district flags (data) | 2, 7 |
+| Orchestrator | 8 |
+| Sandbox job, safety rules | 9 |
+| URL validation, GitHub API, caps, gallery build | 2, 10 |
+| Password gate and session, handler-level check, password length | 11 |
+| Cache, jobs, orphans, quota reserve and release, login rate limit (database layer) | 12a |
+| API routes, flow, error-code mapping, preview check | 12b |
+| Layout (treemap and city) | 13 |
+| Rendering, colour modes, legends, performance method | 14 |
+| Accessibility and device fallbacks | 14, 15b |
+| Viewer UI: details, report card, search, toggle, gallery home, rename-history note, bug-fix match rate, aliases-not-merged note, "analysed on <date> at <sha>" | 15a |
+| Co-change arcs; loading, error, empty and thin-history states; hostile-string test | 15b |
+| Single-owner district outline or badge and tooltip | 14, 15a |
+| Safe rendering of repo-derived strings | 1, 15b |
+| Payload limits | 2, 5, 8, 9 |
+| Gallery, deploy, README, demo GIF, packaging | 16 |
+| Interview guide kept current | 16 |
+
+## Branches
+
+Implementation starts only after the `docs/requirements-seed` PR (seed, ADR, guide, design, this plan) is reviewed and fully merged into `main`. Then one branch per group, each merged by PR before the next starts: `chore/scaffold` (Task 1), `feat/ingestion` (2 to 8), `feat/live-analysis` (0 results applied, 9 to 12b), `feat/viewer` (13 to 15b), `chore/ship-gallery` (16). The order matches the day plan in design section 12: live analysis before the viewer. Task 0 is a throwaway spike on `spike/sandbox` and is never merged; only its findings doc goes in via a `docs/` branch.
+
+## File structure
+
+```
+lib/analysis/{types,schema}.ts        Analysis types and zod schema
+lib/ingest/{parseLog,metrics,cochange,report,analyze}.ts
+lib/caps.ts, lib/repo/{url,validate,github}.ts   caps, input validation (shared by web and job), GitHub API
+lib/links.ts                           GitHub file link builder
+lib/sandbox/{job.ts,run.ts}            job script (runs in Sandbox) and runner (runs in web function); esbuild bundles job.ts to dist/sandbox-job.mjs (not committed)
+lib/session.ts                         copied pattern from the-fourth-official
+lib/db/{client,cache,jobs,limits}.ts      database layer (Task 12a); lib/errors.ts maps codes to messages (Task 12b)
+lib/layout/{treemap,city}.ts           pure layout
+lib/render/{scene,colours,legend}.ts; lib/a11y.ts   luminance, flyToMode, canUseWebGL (Task 15b)
+app/{page,gate,r/[owner]/[repo]}/...   pages; app/api/{analyze,jobs/[id],session}/route.ts
+scripts/build-gallery.ts               local gallery build (CLI)
+public/gallery/*.json                  committed gallery data
+tests/                                 mirrors lib/; tests/helpers/makeRepo.ts
+```
+
+---
+
+### Task 0: Sandbox spike (Day 0, throwaway)
+
+**Files:** Create `spikes/sandbox/` on `spike/sandbox` (not merged; a minimal throwaway Next.js app for the deployed-route items); the Vercel project, Marketplace Postgres and sensitive variable names are created in the Vercel dashboard (no files); Create `docs/spikes/2026-11-sandbox-spike.md` (findings, merged via a `docs/` branch).
+
+**Interfaces:** Produces the findings doc and a Vercel project with a Marketplace Postgres and sensitive variable names (`DEMO_PASSWORD`, `SESSION_SECRET`, `GITHUB_TOKEN`, the database URL; names only, plus whatever Sandbox credentials Vercel requires, unverified), which Task 12b's preview check uses. Tasks 9 and 12b read the findings.
+
+Needs a Vercel account and a Marketplace Postgres; Markus creates them and supplies access.
+
+- [ ] **Step 0: Set up.** Create the minimal Next.js app in `spikes/sandbox/`. Install the Vercel CLI; Markus runs `vercel login` in his browser (no token pasted in chat), then `vercel link` with the Vercel project's Root Directory set to `spikes/sandbox`. The Marketplace Postgres connection string goes into Vercel environment variables, never into chat or the repo. The test repo for the Sandbox timing items is `expressjs/express`.
+- [ ] **Step 1: Measure and record**, each as pass or fail with the number: (a) Sandbox create-to-first-command time, pass if at most 20 s at the median of 5 runs; (b) end-to-end clone and `git log` of an express-sized repo inside a Sandbox, pass if 60 s or less; (c) a `POST` that has already returned its job id continues the work in `waitUntil` or Next.js `after` for 240 s on Hobby, with the route exporting `maxDuration = 300` and with Fluid compute enabled (both unverified; record whether either is needed); pass if the continuation is not cut at the 300 s limit (unverified whether that limit applies to it), otherwise test detached run plus signed callback; (d) read back a 5 MB JSON result from the Sandbox; (e) network policy can limit egress to github.com; (f) `git clone --filter=blob:none --no-checkout --shallow-since=<date>` then `git log` with the shallow boundary commits (listed in the repo's shallow file) dropped gives per-file change counts identical to a full-clone `git log` restricted to the same commit set (the shallow clone's non-boundary commits, by hash); record how many boundary commits were dropped, checked on express; (g) `--use-mailmap` cost in a blobless clone, pass if it adds at most 5 s; (h) Hobby Sandbox allowance, concurrency and timeout as shown in the Vercel dashboard or docs, recorded; pass if at least 150 minutes a month and concurrency of at least 2; (i) stored size of one analysis in Postgres and the free-tier storage limit, real analyses of both an express-sized repo and a repo near the 10,000-file cap (confirm or retune the 8 MB schema and stdout bound against the largest measured; about 400 bytes per file would be about 4 MB, an estimate), and the API response size, gzip-compressed and not, against any Vercel response-size limit (a 4.5 MB limit is unverified); pass if the analysis JSON for a repo near 10,000 files is at most 8 MB and the response size is checked against any limit found; (j) read Vercel's Hobby terms for any non-commercial restriction; (k) the Sandbox image has git and Node 20 or later, and which versions (record them; the bundled job targets that Node version); (l) with Markus supplying access, create the Vercel project, the Marketplace Postgres and the sensitive variable names; (m) a stand-in file included through Next.js file tracing (`outputFileTracingIncludes`, unverified) is present in a deployed preview function and readable at runtime, as the model for `dist/sandbox-job.mjs` in Task 9.
+- [ ] **Step 2: Decide.** If (b), (c) or (e) fails, or (h) is below 150 minutes a month or 2 concurrent Sandboxes, stop and ask Markus: ADR-001 is revisited (Railway B1 or B2). Do not continue to Task 9.
+- [ ] **Step 3: Commit the findings doc** with `docs(spike): record Sandbox spike results`. Update the design's "calls" that the spike changed (240 s wait vs callback, shallow clone vs full, mailmap on or off).
+
+### Task 1: Scaffold and quality baseline (`chore/scaffold`)
+
+**Files:** Create the Next.js app skeleton, `.husky/*`, `eslint.config.mjs`, `commitlint.config.mjs`, `.github/workflows/{ci,codeql}.yml`, `.gitleaks.toml`, `vitest.config.ts`; Modify `.claude/settings.json` (the git and gh allow-list already exists; add the hook), `.github/dependabot.yml`, `CONTRIBUTING.md`, `CLAUDE.md`.
+
+**Interfaces:** Produces `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`.
+
+- [ ] **Step 1:** Scaffold Next.js (App Router, TypeScript strict, no Tailwind decision here: the `design-process` skill decides styling before Task 14).
+- [ ] **Step 1a:** Install gitleaks before the Husky hook step: `winget install Gitleaks.Gitleaks` (Markus runs it in PowerShell if needed).
+- [ ] **Step 2:** Apply `~/.claude/standards/nodejs-quality-baseline.md` sections 1 to 8: Husky plus lint-staged, ESLint with `no-explicit-any` as error, `react/no-danger` as error and `no-restricted-properties` banning `innerHTML` (the hostile-string rule, Task 15b), `npm audit --audit-level=high` and `tsc --noEmit` in CI, commitlint with the standard's type list and 72-character header, gitleaks pre-commit, CodeQL from the `github-setup` templates. Modify `.claude/settings.json` to add the per-file Prettier `PostToolUse` hook (pattern from chat-app). `package.json` scripts include `format` (Prettier) and `typecheck` (`tsc --noEmit`), and lint-staged runs Prettier and ESLint.
+- [ ] **Step 3:** Add a `gitleaks` custom rule blocking local device paths, matching both the backslash rendering of a drive-letter path under a Users folder (with the backslashes doubled in the regex; a single-backslash version silently fails) and the Git-Bash forward-slash rendering, case-insensitive on the drive letter. Spell the patterns only in `.gitleaks.toml`, never in docs, so the docs do not trip the rule. Test: a staged file containing each form is rejected.
+- [ ] **Step 4:** Add the `npm` entry to `.github/dependabot.yml`; replace the placeholder in `CONTRIBUTING.md` with real setup commands.
+- [ ] **Step 5:** Verify: `npm test` passes with one smoke test, `npm run lint`, `npm run typecheck` and `npm run build` pass, a commit with a bad message is blocked, `gh api repos/markusluisflores/codebase-city --jq .delete_branch_on_merge` returns `true` (enable it if not), secret scanning and push protection are recorded as unavailable on a private free-plan repo and to be enabled if the repo goes public (baseline section 7 second layer), and CI is green on the PR.
+- [ ] **Step 6:** Commit as `chore(scaffold): set up Next.js app and quality baseline`.
+
+### Task 2: `Analysis` types and schema
+
+**Files:** Create `lib/analysis/types.ts`, `lib/analysis/schema.ts`, `lib/caps.ts`, `lib/repo/validate.ts`; Test `tests/analysis/schema.test.ts`, `tests/repo/validate.test.ts`.
+
+**Interfaces:** Produces `type Analysis`, `type FileStat`, `type CoChange`, `type Report`, `const SCHEMA_VERSION: number`, `analysisSchema` (zod), `parseAnalysis(json: unknown): Analysis` (throws on invalid). `FileStat`: `path, size, language, changes, lastChanged (unix seconds or null for older than window), bugFixes, authors: {key,name,share}[] (at most 5; `key` is a 12-hex-character hash, never an email), mainAuthor: string|null, mainAuthorShare, coChange: CoChange[]`. `CoChange`: `{path, shared, score}`. `repo`: `{owner:string; name:string; headSha:string; defaultBranch:string}`. `window`: `{from:number; to:number; commits:number}` (`from` and `to` are unix seconds, `commits` is the commits counted). `stats`: `{bugFixCommitShare:number; botCommitsExcluded:number; commitsInWindow:number; thinHistory:boolean; mailmapApplied:boolean; capsHit:string[]}`. The schema bounds input from the Sandbox: at most 10,000 files, `path` at most 1,024 characters, author `name` at most 200 and never containing `@`, at most 5 authors and 5 co-changes per file, report lists at most 10, at most 2,000 `districts`, and a total serialised size of at most 8 MB. `districts`: `{path:string; singleOwner:boolean; ownerKey:string|null; ownerName:string|null; ownerShare:number (0 to 1); changes:number}[]`. `lib/caps.ts` exports `CAPS` (`maxSizeKb`, `maxTotalCommits: 50_000`, `maxCommitsInWindow: 20_000`, `maxFiles: 10_000`, `analysisDeadlineMs: 240_000`, `maxStdoutBytes: 8_388_608`), consumed by Tasks 9 and 10. `lib/repo/validate.ts` exports `validateOwnerName(s): boolean`, `validateHeadSha(s): boolean` (40 lower-case hex characters) and `validateWindowFrom(n): boolean` (an integer between 2000-01-01 and 2100-01-01 in unix seconds), consumed by Tasks 9 and 10.
+
+- [ ] **Step 1:** Write failing tests: an author `key` that is not 12 hex characters (for example an email) is rejected; a valid sample parses; missing `schemaVersion` throws; negative size throws; `coChange` longer than 5 throws; a file with `lastChanged: null` is valid; 10,001 files, a 1,025-character path and 6 authors on one file are each rejected; an author `name` containing `@` is rejected; `stats` missing any of its six fields throws; a missing `repo.headSha` throws; a `window` with a non-numeric `from` or `to` throws; 2,001 districts throw and a district missing `singleOwner` throws; a sample whose serialised size exceeds 8 MB (10,000 files with maximal paths and co-changes) throws; `CAPS` has the starting values; `validateOwnerName` accepts `o` and `r-1.x` and rejects `.`, `..`, `-x`, `a/b` and the empty string; `validateHeadSha` accepts 40 lower-case hex characters and rejects 39, 41 and non-hex; `validateWindowFrom` accepts an in-range integer and rejects floats, negatives and strings.
+- [ ] **Step 2:** Implement the types and schema; run tests to pass; commit `feat(analysis): add Analysis schema with validation`.
+
+### Task 3: Fixture repo builder
+
+**Files:** Create `tests/helpers/makeRepo.ts`; Test `tests/helpers/makeRepo.test.ts`.
+
+**Interfaces:** Produces `makeRepo(commits: {author:string; email:string; time:number; subject:string; files:Record<string,string>}[]): Promise<{dir:string; cleanup():Promise<void>}>` (a real local git repo built by scripted commits with git plumbing, not a working tree: `git hash-object -w --stdin`, `git update-index --add --cacheinfo`, `git write-tree`, `git commit-tree` and `git update-ref`, with author and committer dates taken from each scripted commit's `time`; this is because a double quote or a newline in a path is not a legal Windows file name, and paths with spaces and unicode go through the same plumbing for consistency) and `gitLogRaw(dir, sinceUnix?): string` that runs the history command from spec section 7 with one difference: it adds `-z` (NUL-separated output, Review Focus 2). The spec command is the human-readable form; the plan's `-z` form is the one implemented.
+
+- [ ] **Step 1:** Test: three scripted commits produce a repo whose `gitLogRaw` output contains all three subjects and file paths; a path with a space, a quote and a unicode character is present; a commit containing a path with a double quote and a newline is created and read back through `gitLogRaw` with the exact path, on any OS (no working-tree file is created); the commit's author and committer timestamps equal the scripted `time`. Task 4's tests use these fixtures.
+- [ ] **Step 2:** Implement using the system `git`; commit `test(helpers): add scripted fixture repo builder`.
+
+### Task 4: Log parser (`feat/ingestion` begins)
+
+**Files:** Create `lib/ingest/parseLog.ts`; Test `tests/ingest/parseLog.test.ts`.
+
+**Interfaces:** Consumes `gitLogRaw` format from Task 3. Produces `type Commit = {hash, authorName, authorEmail, time, subject, files: string[]}` and `parseLog(raw: string, opts?: {dropHashes?: Set<string>}): Commit[]`.
+
+- [ ] **Step 1:** Failing tests using `makeRepo`: commit with path containing space, double quote, unicode and a tab character parses to the exact path, and a path containing a newline parses to the exact path (handled by `-z` output; Review Focus 2); commit with no files returns `files: []`; `dropHashes` removes shallow boundary commits; an empty string returns `[]`; empty author name or email is kept as an empty string.
+- [ ] **Step 2:** Implement parsing of NUL-separated (`-z`) output; run tests; commit `feat(ingest): parse git log output including awkward paths`.
+
+### Task 5: Per-file metrics
+
+**Files:** Create `lib/ingest/metrics.ts`; Test `tests/ingest/metrics.test.ts`.
+
+**Interfaces:** Produces `isBugFix(subject: string): boolean`, `isBot(name: string, email: string): boolean`, `normaliseEmail(email: string): string`, `authorKey(email: string): string` (first 12 hex characters of the SHA-256 of the normalised email), `scrubName(name: string): string` (cuts a display name at any `@`; used for `authors[].name`, `mainAuthor` and district owner names), `languageOf(path: string): string`, `computeFileStats(commits: Commit[], head: {path:string; size:number}[], windowFromUnix: number): FileStat[]` (without `coChange`).
+
+- [ ] **Step 1:** Failing tests: `isBugFix` true for "Fix crash on empty input", "fixes #12", "hotfix: login", false for "fix typo in README", "lint fixes", "docs: fix link", "prefix handling" (word boundary); `normaliseEmail` lowercases and turns `123+jane@users.noreply.github.com` into `jane@users.noreply.github.com`; `authorKey` is 12 hex characters, equal for `Jane@X.com` and `jane@x.com`, and never contains the email; the serialised `computeFileStats` output contains no `@` from any author email (privacy check); `isBot` true for `dependabot[bot]` and `renovate`; `computeFileStats` counts changes and bug-fixes only inside the window, excludes bot commits from authors, sets `lastChanged: null` for files with no in-window commit, still lists those files, yields `mainAuthor: null` when no author. One author and all-equal values must not throw (Review Focus 5); an author display name of 300 characters is truncated to 200; `scrubName('jane@example.com')` is `jane`, and a name that is only a local part (`jane`) is unchanged; the serialised `computeFileStats` output contains no `@` anywhere, display names included.
+- [ ] **Step 2:** Implement; run tests; commit `feat(ingest): compute churn, bug-fix and ownership per file`.
+
+### Task 6: Co-change
+
+**Files:** Create `lib/ingest/cochange.ts`; Test `tests/ingest/cochange.test.ts`.
+
+**Interfaces:** Produces `computeCoChange(commits: Commit[], headPaths: Set<string>): Map<string, CoChange[]>`.
+
+- [ ] **Step 1:** Failing tests: two files changed together in 4 of 5 commits give the exact Jaccard score 0.8 and shared 4; a commit with 31 files contributes nothing to co-change; pairs with shared 2 are dropped; score under 0.3 dropped; at most 5 per file, ordered by score then path; files not at HEAD never appear; a file with fewer than 3 changes gets none.
+- [ ] **Step 2:** Implement with pair counting over commits of 30 files or fewer; run tests; commit `feat(ingest): compute co-change coupling between files`.
+
+### Task 7: Hotspot, report card, districts
+
+**Files:** Create `lib/ingest/report.ts`; Test `tests/ingest/report.test.ts`.
+
+**Interfaces:** Produces `const IGNORED_FOR_REPORT: RegExp[]`, `hotspotScore(files: FileStat[]): Map<string, number>`, `buildReport(files: FileStat[]): Report` (`readFirst`, `riskiest`, `forgotten`: 10 paths each), `singleOwnerDistricts(files: FileStat[]): Analysis['districts']` (returns every district, meaning every folder at depth 1 or 2 from the repo root, with `singleOwner` set by the 80% and 5-change rule; `ownerShare` is a 0 to 1 fraction; `ownerKey` and `ownerName` are null when there is no author; a district's `changes` sums the files beneath it; the author share is the sum of share times changes over its files; since `authors` is truncated to 5 per file this can only under-flag, never over-flag, because an author holding 80% of a district is inside every file's top 5).
+
+- [ ] **Step 1:** Failing tests: hotspot is rank(changes) times rank(size), 0 to 1, with defined output when every value ties (Review Focus 5); `package-lock.json`, `*.min.js`, `dist/**`, `vendor/**` and images never appear in any report list even when they top the raw score (Review Focus 1); `readFirst` uses weights 0.5, 0.3, 0.2 from the spec; `riskiest` excludes files under 3 changes; `forgotten` lists no-window files by size descending then oldest in-window, only above median size, ties by size then path; fewer than 10 candidates returns fewer, not padding; empty file list returns empty lists (Review Focus 3); `singleOwnerDistricts` lists folders at depth 1 and depth 2 and no depth-0 or depth-3 folder; a district with one author at 80% and 5 changes has `singleOwner: true` with that author's key, name and share, at 79% or at 4 changes it has `singleOwner: false` but is still listed; a district with no author has null owner fields.
+- [ ] **Step 2:** Implement; run tests; commit `feat(ingest): compute hotspot, report card and single-owner districts`.
+
+### Task 8: Orchestrator
+
+**Files:** Create `lib/ingest/analyze.ts`; Test `tests/ingest/analyze.test.ts`.
+
+**Interfaces:** Produces `analyze(input: {repo: RepoMeta; rawLog: string; head: {path:string; size:number}[]; dropHashes?: Set<string>; windowFromUnix: number; mailmapApplied?: boolean}): Analysis` and `windowStart(latestCommitUnix: number): number` (24 months earlier). `RepoMeta`: `{owner, name, headSha, defaultBranch}`. Consumes Tasks 4 to 7.
+
+- [ ] **Step 1:** Failing tests on a `makeRepo` fixture: end-to-end `analyze` output passes `parseAnalysis` and its serialised form contains no `@` anywhere (fixture authors named with email addresses; `districts[].ownerName` included); a repo with 3 commits sets `stats.thinHistory: true` and `stats.commitsInWindow: 3` (and 20 commits sets `thinHistory: false`); `stats.mailmapApplied` echoes the input flag (default false); `districts` is populated from `singleOwnerDistricts`; a file with a 1,025-character path is skipped, `stats.capsHit` contains `path_too_long` and the rest of the analysis is still valid; a repo with more than 2,000 folders at depth 1 or 2 yields exactly the 2,000 districts with the most changes (ties broken by path ascending; more than 2,000 equal-change folders give the same lowest-path 2,000 on every run and for any input order), `stats.capsHit` contains `districts_truncated`, and the result passes `parseAnalysis`; an empty log returns a valid `Analysis` with every file cold (Review Focus 3); `stats.bugFixCommitShare` and `botCommitsExcluded` are correct; `windowStart` handles a leap day.
+- [ ] **Step 2:** Implement `analyze` (skipping over-long paths, filling `districts` and truncating it to the 2,000 with the most changes, ties by path ascending; the `capsHit` codes are `path_too_long` and `districts_truncated`). The gallery build moved to Task 10 so it reuses `fetchRepoFacts`.
+- [ ] **Step 3:** Run tests; commit `feat(ingest): add analyze orchestrator`. Open the `feat/ingestion` PR.
+
+### Task 9: Sandbox job and runner (`feat/live-analysis`)
+
+**Files:** Create `lib/sandbox/job.ts`, `lib/sandbox/run.ts`, an npm script `build:sandbox` (esbuild, single output `dist/sandbox-job.mjs`); Test `tests/sandbox/job.test.ts`.
+
+**Interfaces:** Produces `job.ts` (bundled into the Sandbox; entry reads `-- owner repo headSha defaultBranch windowFromUnix` and a sizes file, prints phase lines and then one `Analysis` JSON line, or one error line carrying a code) and `runAnalysisInSandbox(input: {owner:string; name:string; headSha:string; defaultBranch:string; windowFromUnix:number; head:{path:string;size:number}[]; deadlineMs:number; onPhase?:(phase:'cloning'|'reading_history'|'computing')=>void}): Promise<Analysis>` which creates a Sandbox with its own timeout equal to `deadlineMs`, runs, calls `onPhase` as the job prints phase lines, validates with `parseAnalysis`, checks the returned `repo.owner`, `repo.name` and `repo.headSha` equal the request, always destroys the Sandbox, and throws a typed `SandboxError` with code `timeout | clone_failed | stale_head | invalid_output | too_many_commits_in_window`. The job fills `Analysis.repo` from `headSha` and `defaultBranch`, runs `git log` from `headSha`, fails `stale_head` if that SHA is absent from the clone, and fails `too_many_commits_in_window` if more than `CAPS.maxCommitsInWindow` (`lib/caps.ts`, Task 2) commits are in the window. The job re-validates `owner`, `name`, `headSha` and `windowFromUnix` with the Task 2 validators and exits non-zero with an error line on any bad argument. The runner reads at most `CAPS.maxStdoutBytes` (8 MB) of Sandbox stdout and raises `invalid_output` beyond it. Mechanics follow the Task 0 findings doc (wait vs callback).
+
+- [ ] **Step 1:** Failing tests (Sandbox client mocked, `job.ts` tested against a local fixture repo): clone arguments include `--filter=blob:none --no-checkout` and hook-disabling config and never the user's string; clone URL is built only from validated owner and name; invalid JSON from the Sandbox raises `invalid_output` and the Sandbox is still destroyed; deadline exceeded raises `timeout` and destroys the Sandbox; the Sandbox is created with a timeout equal to the deadline; `onPhase` is called with `cloning`, `reading_history`, `computing` in that order; a returned `repo.headSha` (or owner or name) that differs from the request raises `invalid_output`; the job (against a local fixture repo) fails `stale_head` when the given head SHA is absent and runs `git log` from the given SHA rather than the clone's HEAD; a fixture with more commits in the window than a lowered cap fails `too_many_commits_in_window`; `owner` and `repo` reach the job only after `--`; the job exits non-zero for a bad owner, a headSha that is not 40 hex characters, and a non-integer or out-of-range `windowFromUnix`; stdout over 8 MB raises `invalid_output` and the Sandbox is still destroyed.
+- [ ] **Step 2:** Implement; run tests. Run `npm run build:sandbox` and check `dist/sandbox-job.mjs` runs under the Node version recorded in Task 0 item (k) (esbuild suitability is unverified until then). Configure Next.js file tracing (`outputFileTracingIncludes`, unverified) so `dist/sandbox-job.mjs` is included in the analyse function, make `npm run build` run `build:sandbox` first, and check on a deployed preview that the route can read the bundle at runtime (model: Task 0 item (m)). Run one real end-to-end analysis of a small public repo by hand and record the time.
+- [ ] **Step 3:** Run `/security-review` on this diff. Commit `feat(sandbox): run analysis in a disposable Sandbox`.
+
+### Task 10: Repo input, GitHub client, caps, gallery build
+
+**Files:** Create `lib/repo/url.ts`, `lib/repo/github.ts`, `scripts/build-gallery.ts`, `scripts/gallery.json` (curated list); Test `tests/repo/*.test.ts`, `tests/scripts/build-gallery.test.ts`.
+
+**Interfaces:** Produces `parseRepoInput(input: string): {owner:string; name:string} | null`; `fetchRepoFacts(owner, name): Promise<{sizeKb:number; totalCommits:number; latestCommitUnix:number; headSha:string; defaultBranch:string; tree:{path:string;size:number}[]; treeTruncated:boolean}>`; `checkCaps(facts, caps): {ok:true} | {ok:false; code: 'repo_too_large'|'too_many_commits'|'too_many_files'|'tree_truncated'}` (`too_many_commits` is the TOTAL commit count from the API against `CAPS.maxTotalCommits`; the in-window cap is not checked here, the job enforces it, Task 9); `CAPS` comes from `lib/caps.ts` (Task 2), and `parseRepoInput` uses `validateOwnerName` from `lib/repo/validate.ts`. `scripts/build-gallery.ts` reads `scripts/gallery.json`, calls `fetchRepoFacts` and `checkCaps` (so it shares the truncated-tree and cap checks with the live path), does a local blobless clone into a temp directory, runs `analyze`, and writes `public/gallery/<owner>__<repo>.json`.
+
+- [ ] **Step 1:** Failing tests (Review Focus 4): accepts `owner/repo`, `https://github.com/Owner/Repo.git`, `http://www.github.com/o/r/tree/main`; returns owner and name unchanged in case; rejects `owner/repo;rm -rf`, `--upload-pack=x/y`, `https://evil.com/o/r`, `github.com/o`, owner or repo equal to `.` or `..`, a name starting with `-` or `.`, empty input. `checkCaps` returns each code at its boundary (limit passes, limit plus one fails; for `too_many_files` 10,000 passes and 10,001 fails); a repo with 60,000 total commits is rejected `too_many_commits` and one with 49,999 passes even though 49,999 is above the in-window cap; a truncated tree is a reject. `fetchRepoFacts` tested with a mocked `fetch` including the `Link` header total-commit trick and a 403 rate-limit response mapped to a typed `GitHubRateLimited`; a 404 for a repo that does not exist maps to the typed `not_found` error code (spec section 11, Task 12b mapping).
+- [ ] **Step 2:** Add tests for the gallery build with the git and GitHub calls mocked: it calls `fetchRepoFacts` rather than its own trees request, a truncated tree or an over-cap repo is refused, and it writes the expected file name; plus a test that fails if any committed gallery file has an out-of-date `schemaVersion` (passes trivially with zero files).
+- [ ] **Step 3:** Implement; run tests; commit `feat(repo): validate input, fetch facts, enforce caps, build gallery`.
+
+### Task 11: Password gate and session
+
+**Files:** Create `lib/session.ts`, `app/gate/page.tsx`, `app/api/session/route.ts`, `app/api/analyze/route.ts` (session-checking handler, completed in Task 12b), `proxy.ts`; Test `tests/session.test.ts`, `tests/session-route.test.ts`.
+
+**Interfaces:** Produces `createSessionToken`, `verifySessionToken`, `passwordMatches` with the same signatures as `the-fourth-official/lib/session.ts` (copied, not imported). `proxy.ts` gates only `POST /api/analyze` (401 JSON when not signed in). The `POST /api/analyze` handler also verifies the session itself through `requireSession(req)` (defence in depth), and `assertSessionConfig(env)` throws at startup unless `DEMO_PASSWORD` is at least 16 characters and `SESSION_SECRET` is set.
+
+- [ ] **Step 1:** Port the session tests from the Fourth Official's `tests/session*.test.ts` and add: gallery and viewer routes are reachable without a cookie; a tampered token fails; a wrong password is rate-limited after 5 attempts a minute per IP using the Task 12a `recordFailedLogin(ip, now)` and `tooManyAttempts(ip, now)` interface (stubbed here with the same signatures, wired in Task 12b); the session cookie is set with `HttpOnly`, `Secure` and `SameSite=Lax`; calling the `POST /api/analyze` handler directly (bypassing `proxy.ts`) without a cookie returns 401; `assertSessionConfig` throws for a 15-character `DEMO_PASSWORD` and a missing `SESSION_SECRET` and passes for 16 characters.
+- [ ] **Step 2:** Implement; run tests. Sibling-reuse note: this is a deliberate copy of the existing pattern, domain-separated HMACs included.
+- [ ] **Step 3:** `/security-review`; commit `feat(auth): add shared-password gate for live analysis`.
+
+### Task 12a: Database layer (cache, jobs, quota, login attempts)
+
+**Files:** Create `lib/db/{client,cache,jobs,limits}.ts`, `db/schema.sql`; Test `tests/db/*.test.ts`.
+
+**Interfaces:** Produces `getCached(owner, name, schemaVersion): Promise<{analysis: Analysis; analysedAt: Date}|null>` (the stored `headSha` is `analysis.repo.headSha`), `putCached(analysis: Analysis, now: Date): Promise<void>` (upsert: replaces the row for `(owner, name, schemaVersion)`), `createOrReuseJob(owner, name, now): Promise<{id:string; reused:boolean}>` (first sweeps stale rows for the repo: a non-terminal row older than 5 minutes is marked failed `timeout`, and its quota released if `reserved`, before reuse is considered; stores a `reserved` flag, false until `reserveQuota` succeeds, and the UTC reservation date on a new row; a refused reservation marks the new row failed with the quota error code before returning; `jobs` has a unique partial index on `(owner, name)` for non-terminal rows, and a concurrent loser re-reads and reuses the winner's job; ids are `crypto.randomUUID()`; a non-terminal job for the same repo is reused), `setJobPhase(id, phase, errorCode?)`, `getJob(id, now)` (a non-terminal job older than 5 minutes is returned and stored as failed with `timeout` and its quota released against the stored reservation date), `reserveQuota(now: Date): Promise<{ok:true}|{ok:false; reason:'daily'|'monthly'}>`, `releaseQuota(reservedOn: string): Promise<void>` (the job's stored UTC date, not the release time), `recordFailedLogin(ip: string, now: Date): Promise<void>`, `tooManyAttempts(ip: string, now: Date): Promise<boolean>` (5 per minute per IP). Tables: `analyses` (unique `(owner, name, schema_version)`), `jobs`, `usage_counters`, `login_attempts` (stores `HMAC(SESSION_SECRET, "login-ip:" + ip)` as hex, domain-separated like the session module, never the raw IP; rows older than 1 hour are purged on each insert). Consumes Task 2 (`Analysis`) and the Task 11 `recordFailedLogin` and `tooManyAttempts` stub signatures. Task 12b consumes all of it.
+
+- [ ] **Step 1:** Failing tests (PGlite, real Postgres compiled to WASM, so the partial unique index and concurrency follow Postgres semantics; PGlite support for partial unique indexes is unverified, fall back to a Testcontainers Postgres if it fails; no network): `getCached` is keyed by `(owner, name, schemaVersion)` and a row with another schema version is not returned; `putCached` of a new head SHA replaces the row rather than adding one; the 11th analysis in a day is refused with `daily`, the 61st in a month with `monthly`, counters roll over at UTC midnight and month end; a failed job releases its quota so the next analysis is allowed; a second `createOrReuseJob` for the same repo while a job is in flight leaves the quota counters unchanged (reuse never reserves) and returns the same id; ten calls for one repo consume one unit; a job started at 23:59 UTC and failed after midnight releases the previous day's unit, not the new day's (the reservation date is stored on the job row); a job in a non-terminal phase 5 minutes and 1 second old reads as failed `timeout` (and 4 minutes 59 seconds does not); a killed job whose browser tab was closed (a non-terminal row 6 minutes old) is marked failed by the next `createOrReuseJob` for that repo, its quota is released if reserved, and a new job is created rather than the stale row being reused; a refused reservation leaves no reusable non-terminal row; the sweep of a row with `reserved = false` releases nothing, and of a `reserved = true` row releases once; two concurrent calls for the same repo create one row and one reservation; job ids are UUIDs; the 6th failed login from one IP within a minute makes `tooManyAttempts` true and an attempt after the one-minute window has passed is allowed, other IPs unaffected; a test inserts `203.0.113.9` and finds no stored value containing it, and the stored value equals the domain-separated HMAC; rows older than 1 hour are purged on the next insert.
+- [ ] **Step 2:** Implement the schema and functions; run tests; `/security-review`; commit `feat(db): add cache, job, quota and login attempt store`.
+
+### Task 12b: API routes, flow and error mapping
+
+**Files:** Create `app/api/analyze/route.ts` (completes the Task 11 handler), `app/api/jobs/[id]/route.ts`, `lib/errors.ts`; Test `tests/api/*.test.ts`, `tests/errors.test.ts`.
+
+**Interfaces:** Produces `POST /api/analyze {repo}` (gated; the handler itself calls `requireSession`, Task 11; the route exports `maxDuration = 300`, unverified, see Task 0 item (c)), which implements the flow in spec section 6 and returns `{status:'cached', ...}` or `{status:'job', id}` immediately, continuing the work in the background per the Task 0 findings; `GET /api/jobs/:id` returns phase and error code; the viewer lookup uses `getCached` and the gallery JSON only; `errorMessage(code): string` in `lib/errors.ts` for every code in spec section 11. Consumes Tasks 9 to 11 and 12a, and the Vercel project and variables from Task 0.
+
+- [ ] **Step 1:** Failing route tests (database and GitHub and Sandbox mocked): a gated `POST` whose GitHub head SHA differs from the stored one re-analyses; the same SHA is a hit that consumes no quota; the viewer path never calls GitHub or Sandbox (assert via mocks); a repo listed in `public/gallery/` resolves from the static JSON without a database read, and a gated `POST` for it returns the gallery result with no quota use and no Sandbox; an in-flight job for the same repo returns the same job id and starts no second Sandbox; the job phases advance in order via `onPhase`; a failed database write fails the job with `db_write_failed` and releases the quota; `errorMessage` returns the exact message in spec section 11 for every code (`not_found`, `repo_too_large`, `too_many_commits`, `too_many_commits_in_window`, `too_many_files`, `tree_truncated`, `clone_failed`, `stale_head`, `invalid_output`, `timeout`, `github_rate_limited`, `daily`, `monthly`, `db_write_failed`, `wrong_password`, `too_many_attempts`), and no message contains a stack trace (`at ... (file:line)`) or an internal path (`/var/`, `node_modules`, a drive letter).
+- [ ] **Step 2:** Implement the routes and mapping; run tests.
+- [ ] **Step 3:** `/security-review`; run an end-to-end live analysis on the Vercel preview created in Task 0; commit `feat(api): add analyze and job routes with error mapping`. Open the `feat/live-analysis` PR.
+
+### Task 13: Layout (`feat/viewer`)
+
+**Files:** Create `lib/layout/treemap.ts`, `lib/layout/city.ts`; Test `tests/layout/*.test.ts`.
+
+**Interfaces:** Produces `treemap2D(files: {path:string; size:number}[], width:number, height:number): {path:string; x:number; y:number; w:number; h:number}[]` (squarified, area proportional to size; an optional `maxRects = 5000` merges the smallest files into one "other" rectangle per folder, so the 2D canvas never draws more than 5,000) and `cityLayout(files: {path:string; size:number}[], maxBuildings = 5000): {buildings: {path:string; x:number; z:number; footprint:number; height:number}[]; districts: {path:string; x:number; z:number; w:number; d:number}[]}` (districts are folders at depth 1 and 2 only, a depth-2 district nesting inside its depth-1 parent, matching `Analysis.districts`; files directly in the repo root, and files directly in a depth-1 folder that also has depth-2 subfolders, go into a layout-only pseudo-district named "(files)" under their parent (not listed in `Analysis.districts`); district treemap by file count, equal-footprint buildings in a grid, height on a square-root scale, small files merged into an "other" building past the cap).
+
+- [ ] **Step 1:** Failing tests: treemap areas sum to the container and are proportional to size within tolerance; no rectangles overlap; zero-size files get a minimum area, not NaN; 10,000 files yield at most 5,000 buildings in total, the per-district "other" buildings included; every district contains its buildings; every `Analysis.districts` path (from a fixture with depth 1 and 2 folders) appears as a district in the layout output, and no district deeper than depth 2 exists (files deeper than 2 belong to their depth-2 district; when `Analysis.districts` was truncated the layout may hold more districts than it, never fewer, and `(files)` pseudo-districts are allowed); a fixture with root files and a depth-1 folder holding both direct files and a depth-2 subfolder puts those files in `(files)` pseudo-districts; 10,000 files yield at most 5,000 rectangles from `treemap2D`; all-equal sizes give equal heights; an empty list returns empty output.
+- [ ] **Step 2:** Implement with d3-hierarchy; run tests; commit `feat(layout): add treemap and city layouts`.
+
+### Task 14: Rendering and colour modes
+
+**Files:** Create `lib/render/{scene,colours,legend}.ts`, `components/CityCanvas.tsx`, `components/TreemapView.tsx`; Test `tests/render/colours.test.ts`.
+
+**Interfaces:** Palettes are colour-blind-safe (a sequential palette distinguishable under common colour-vision deficiencies, a categorical palette for languages and owners; tested in Task 15b). Produces `type ColourMode = 'hotspot'|'churn'|'age'|'bugfix'|'language'|'ownership'`, `colourFor(mode, file: FileStat, ctx: {hotspot: Map<string,number>; now: number; owners: Map<string,string>; topOwners: string[]}): string` (hex), `legendFor(mode): {label:string; stops:{colour:string; text:string}[]; note:string}` (the note says it is a heuristic), and a Three.js scene using one instanced mesh, orbit camera, hover and click picking.
+
+- [ ] **Step 1:** Run the `design-process` skill and get Markus's approval of look and layout before any component code. Then write failing tests: every mode returns a valid hex for every file; cold files (`lastChanged: null`) get the neutral grey in `hotspot`, `churn`, `bugfix` and `ownership` modes, never undefined, but in `age` mode get the stalest bucket's colour, not grey (cross-check of colour mode and cold files: these two dimensions interact most because cold files have no data in most modes); the bug-fix mode returns grey for files under 3 changes; legends exist for all six modes and each carries the heuristic note; the `age` legend has exactly six stops, "30 days or less", "90 days or less", "180 days or less", "365 days or less", "730 days or less" and "older than window", and `colourFor` puts a file 31 days old in the second bucket and 731 days old in the stalest (age measured from `ctx.now`, which the viewer sets to `window.to`); the `ownership` legend has up to 8 distinct author stops plus one "others" stop whose colour differs from the "no activity in window" grey, a 9th author maps to "others", and its note explains the single-owner outline; the other history modes' legends include the grey "no activity in window" stop; `districtBadges(districts)` returns only districts with `singleOwner: true`, each with owner name and share, and both the city and the treemap view consume it (checked by hand).
+- [ ] **Step 2:** Implement `colours.ts` and `legend.ts` (tested). Implement the canvas and treemap views (the 2D treemap on a canvas 2D context, capped at 5,000 rectangles) and measure by hand: a dev-only frame-time counter, a 5,000-building fixture, 10 seconds of orbiting on Markus's laptop; target 60 frames a second, floor 30; below the floor, lower the building cap (arcs are already drawn only for the selection); record the figure for the README; no automated pixel tests.
+- [ ] **Step 3:** Commit `feat(render): add city and treemap views with six colour modes`.
+
+### Task 15a: Viewer page, details and navigation
+
+**Files:** Create `app/r/[owner]/[repo]/page.tsx`, `components/{DetailsPanel,ReportCard,SearchBox}.tsx`, `app/page.tsx` (gallery home), `lib/links.ts`; Test `tests/components/*.test.tsx`, `tests/links.test.ts`.
+
+**Interfaces:** Consumes `Analysis`, `ColourMode`, `cityLayout`, `treemap2D`. Produces the viewer page. It shows "analysed on <date> at <sha>" for a stored row, states that renames split a file's history (always visible near the legend), the repo-wide bug-fix match rate (`stats.bugFixCommitShare`) beside the bug-fix legend, and "aliases are not merged" when `stats.mailmapApplied` is false. The details panel shows size, changes, last changed (or "older than window"), bug-fix commits, main author and a GitHub link to the file, `githubFileUrl(repo, headSha, path)` = `https://github.com/<owner>/<repo>/blob/<headSha>/<path>` with each path segment passed through `encodeURIComponent`. The report card's entries fly the camera to the file. Hovering a district whose `singleOwner` is true shows "single owner: <name> (<share>%)". Task 15b adds arcs, states and accessibility on top.
+
+- [ ] **Step 1:** Failing component tests: "older than window" renders for `lastChanged: null`; the rename-history note renders in every colour mode; the bug-fix match rate renders as a percentage from `stats.bugFixCommitShare` (0 renders as 0%, not blank); the aliases-not-merged note renders when `mailmapApplied` is false and not when true; "analysed on <date> at <sha>" renders for a stored row; the 2D/3D toggle switches the rendered view; typing in search and choosing a result selects that building; clicking a report-card entry calls the camera fly-to with that file's building position; `githubFileUrl` encodes a path with a space, `#`, `?` and a unicode character segment by segment (slashes kept) and the details panel link equals it; a flagged district tooltip reads "single owner: <name> (<share>%)" (0.86 shows 86%) and an unflagged district shows no such text.
+- [ ] **Step 2:** Implement the page, panels and gallery home; toggle between 3D and 2D; search selects a building; the file link uses `githubFileUrl`.
+- [ ] **Step 3:** Commit `feat(viewer): add viewer page, details panel, search and report card`.
+
+### Task 15b: Arcs, states and accessibility
+
+**Files:** Create `components/{ArcLayer,ErrorState,ThinHistoryNote,AnalyseForm,LoadingSkeleton,EmptyGallery}.tsx`, `lib/a11y.ts`; Modify `app/r/[owner]/[repo]/page.tsx` (loading skeleton, fetch-failure retry, thin-history note, arcs, WebGL fallback), `app/page.tsx` (empty-gallery state) and `components/{SearchBox,ReportCard}.tsx` (keyboard selection and visible focus); Test `tests/components/*.test.tsx`, `tests/a11y.test.ts`.
+
+**Interfaces:** Consumes Task 15a and `errorMessage` (Task 12b). Produces `relativeLuminance(hex): number`, `flyToMode(prefersReducedMotion: boolean): 'animate'|'jump'`, `canUseWebGL(): boolean`. Arcs render only for the selected file. Every repo-derived string (path, author name, anything) renders only as a React text node or `textContent`, never `dangerouslySetInnerHTML` or `innerHTML`, and tooltips truncate to 200 characters. If `canUseWebGL()` is false the 2D treemap shows with an explanatory message. Search and report-card entries are focusable and selectable with Enter, with visible focus.
+
+- [ ] **Step 1:** Failing tests: arcs render for the selected file only and for none when nothing is selected; each error code from spec section 11 renders its own message and no stack trace; a repo with under 20 window commits shows the thin-history note in every history-based mode (Review Focus 3); wrong password and the unauthenticated "enter the password to analyse" state render; polling shows each job phase in order; a loading skeleton renders while the Analysis fetches; a fetch failure renders an error with a retry button that refetches; an empty gallery (no files in the gallery JSON) renders an empty-gallery state; a path and an author name of `<img src=x onerror=alert(1)>` appear as literal text with no `img` element in the DOM; a 300-character path in a tooltip is cut to 200 characters; adjacent stops of every sequential legend differ in relative luminance by at least 0.1 and the categorical palettes (language, ownership) have no two equal colours; `flyToMode(true)` is `'jump'` and `flyToMode(false)` is `'animate'`; `canUseWebGL()` mocked false renders the 2D treemap with the message; search results and report-card entries are focusable and Enter selects them.
+- [ ] **Step 2:** Implement; check by hand and record: touch (orbit, pinch-zoom and tap-to-select work on a phone or emulator), keyboard-only use, reduced-motion setting, and focus visibility. The colour-blind-safe palettes are checked by the luminance test plus a visual pass through a colour-vision simulator.
+- [ ] **Step 3:** Run `pre-pr-review` and open the `feat/viewer` PR; commit `feat(viewer): add arcs, states and accessibility`.
+
+### Task 16: Gallery, deploy, packaging (`chore/ship-gallery`)
+
+**Files:** Create `public/gallery/*.json`, `README.md`, `docs/architecture.md` (Mermaid); Modify `scripts/gallery.json`, `docs/project-reviewer.md`, `docs/adr/` (new ADRs for any decision the spike or build changed), `docs/deployed-services.md` in the workspace (new row, secret names only).
+
+**Interfaces:** Consumes the Task 10 build script.
+
+- [ ] **Step 1:** With Markus, choose 6 to 8 gallery repos (well-known repos of different shapes plus his own); run the gallery build; commit the JSON.
+- [ ] **Step 2:** Finalise production settings (the Vercel project, Postgres and variable names exist from Task 0): set the production values as sensitive variables, deploy, and record the names only and the date in the workspace `docs/deployed-services.md`.
+- [ ] **Step 3:** README with a one-screen summary, run instructions, demo GIF, decisions and trade-offs, known limitations (rename history splits, heuristics, caps); architecture diagram; state in the README that author keys are pseudonymous (an unsalted 12-character hash of the email can be matched against a known address), never anonymised or "no personal data"; update `docs/project-reviewer.md` with what was built and measured (the "Last plan covered" banner).
+- [ ] **Step 4:** Whole-branch review, `/security-review` over the whole app, verify the gallery loads with no cookie and `POST /api/analyze` returns 401 without one, then commit and open the PR. Time slider only if the week has room.
+
+## Self-review notes
+
+- **Spec coverage:** every row of the map above has a task; nothing in the spec's non-goals is implemented.
+- **Type consistency:** `Commit`, `FileStat`, `CoChange`, `Report`, `Analysis`, `RepoMeta`, `ColourMode` are defined once (Tasks 2, 4, 8, 14) and reused by name. `parseAnalysis` is the single validator (Tasks 2, 8, 9).
+- **Plan-level calls not in the spec** (for Markus to check): the report-card ignore list (Review Focus 1); `-z` parsing (the plan's history command differs from the spec's only by `-z`, see Task 3); `reserveQuota`/`releaseQuota` replacing a single `consumeQuota`; one branch per task group; a spike gate that can stop the plan.
+- **Tooling:** commit subjects above are written to the 72-character header limit and the type list in the standard; they get run through the real commitlint hook once Task 1 installs it.
+- **Proportion:** this plan is 288 lines and the design is 226 (`wc -l`, measured after the round 8 fixes); code blocks are signatures and test descriptions, not bodies.
