@@ -93,7 +93,7 @@ Pieces:
 - The viewer route `/r/<owner>/<repo>` validates the name with the same pattern and resolves it as in section 5 (gallery JSON, then the Postgres row). It never calls GitHub or starts a job; an uncached repo shows the password prompt.
 - There is no cache eviction in v1 (decision stands; one row per repo and schema version, replaced on re-analysis). Storage and response size are unverified: the spike (item i) measures the largest analysis JSON and the API response size against any Vercel response-size limit, and the free-tier storage limit. If the database is full the write fails after the Sandbox run was spent; the job then fails with a clear message and the quota is released. **(my call)**
 - The Sandbox is destroyed after every job, success or not, and also has its own timeout (flow step 6).
-- Payload limits (my call): ingestion truncates author names to 200 characters and skips any file whose path exceeds 1,024 characters, counting those in `stats.capsHit` as `path_too_long`, so one oddly named file does not fail the analysis. The schema bounds the total serialised `Analysis` at 8 MB, and the runner caps Sandbox stdout at 8 MB and raises `invalid_output` beyond it.
+- Payload limits (my call): ingestion truncates author names to 200 characters and skips any file whose path exceeds 1,024 characters, counting those in `stats.capsHit` as `path_too_long`, so one oddly named file does not fail the analysis. Likewise `districts` is truncated to the 2,000 with the most changes and `districts_truncated` is recorded in `stats.capsHit` (my call). The `capsHit` codes are `path_too_long` and `districts_truncated`. The schema bounds the total serialised `Analysis` at 8 MB, and the runner caps Sandbox stdout at 8 MB and raises `invalid_output` beyond it.
 
 ## 7. Data
 
@@ -126,7 +126,7 @@ Pieces:
 
 ## 9. Rendering
 
-- **Layout:** squarified treemap (d3-hierarchy) for the 2D view, area equals size. For the 3D city, districts are laid out by a treemap of file count, files are equal-footprint buildings in a grid within their district, and height is size on a square-root scale. Both views share the same `Analysis`. **(my call)**
+- **Layout:** squarified treemap (d3-hierarchy) for the 2D view, area equals size. For the 3D city, districts are folders at depth 1 and 2 only (a depth-2 district nests inside its depth-1 parent), matching `Analysis.districts`, and are laid out by a treemap of file count, files are equal-footprint buildings in a grid within their district, and height is size on a square-root scale. Both views share the same `Analysis`. **(my call)**
 - **3D:** Three.js, one instanced mesh for all buildings, per-instance colour, orbit camera, hover tooltip, search, click for details. Co-change arcs drawn as curves for the selected file only. Library wrapper (plain Three.js or react-three-fiber) is the builder's call.
 - **Cap:** at most 5,000 buildings **including** the per-district "other" buildings; remaining small files in a folder merge into one "other" building for that district. **(my call)** Target 60 frames a second on a mid laptop with a 5,000 building city.
 - **Colour modes:** hotspot, churn, age, bug-fix density, language, ownership, each with a legend and a one-line "this is a heuristic" note. Ownership mode uses distinct colours for the top 8 authors by file-touches and one neutral "others" colour (different from the "no activity" grey), and single-owner districts get a visible outline or badge in both the city and the treemap, explained in the ownership legend. **(my call)** In age mode cold files take the stalest bucket and the legend labels it "older than window"; in the other history-based modes the legend includes the grey "no activity in window" stop. **(my call)**
@@ -192,3 +192,4 @@ Sandbox job mechanics beyond what the spike shows; Postgres partner; Three.js wr
 30. The route handler checks the session as well as the proxy; `DEMO_PASSWORD` at least 16 characters.
 31. Database tests on PGlite, Testcontainers as the fallback; the stale-job rule also runs inside `createOrReuseJob` and on every POST.
 32. The GitHub file link is `https://github.com/<owner>/<repo>/blob/<headSha>/<path>` with encoded segments.
+33. `districts` truncated to the 2,000 with the most changes, recorded as `districts_truncated`; the city layout forms districts at depth 1 and 2 only.
