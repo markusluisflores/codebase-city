@@ -5,7 +5,7 @@
 
 ## Context and Problem Statement
 
-Codebase City analyses a public GitHub repo by cloning it and reading `git log`. The web front end and a gallery of pre-analysed repos are cheap to serve. The live analysis is the hard part: it runs git on untrusted repository content, takes seconds to minutes, and needs a disk. We had to pick a hosting platform and decide where that git work runs. Markus already pays $5 a month for Railway, which currently holds only the live `the-fourth-official` demo (chat-app is offline, FrontRow was never deployed, per `../../../docs/deployed-services.md` (the workspace `docs/` folder) at the time of writing).
+Codebase City analyses a public GitHub repo by cloning it and reading `git log`. The web front end and a gallery of pre-analysed repos are cheap to serve. The live analysis is the hard part: it runs git on untrusted repository content, takes seconds to minutes, and needs a disk. We had to pick a hosting platform and decide where that git work runs. Markus already pays $5 a month for Railway, which currently holds the `the-fourth-official` demo, the only Railway service known to be live (chat-app's worker and Redis have an unknown running state, FrontRow was never deployed, per `../../../docs/deployed-services.md` (the workspace `docs/` folder) at the time of writing).
 
 ## Decision Drivers
 

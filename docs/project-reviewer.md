@@ -18,8 +18,8 @@ Nothing yet. The plan: paste a public GitHub repo URL and get a 3D city plus a 2
 | Hosting | Vercel (ADR-001) | Decided 2026-11-13 |
 | Git analysis | Plain TypeScript module, run inside a Vercel Sandbox | Planned; Sandbox spike outstanding |
 | Database / cache | Postgres via a Vercel Marketplace partner (for example Neon) | Planned, not chosen |
-| Front end | Next.js with Three.js and a 2D treemap | Planned, not confirmed |
-| Public gallery of cached cities; adding a new repo is password-protected | Decided 2026-11-13 (Markus: "make it public, while the adding of repos password protected") | Decided; tier is Standard (confirmed by Markus 2026-11-13), with a security review on the ingestion boundary and the gate |
+| Front end | Next.js with Three.js and a 2D treemap | Decided in the design (2026-11-13) |
+| Access model | Public gallery of cached cities; adding a new repo is password-protected | Decided 2026-11-13 (Markus: "make it public, while the adding of repos password protected") | Decided; tier is Standard (confirmed by Markus 2026-11-13), with a security review on the ingestion boundary and the gate |
 
 ---
 
@@ -89,7 +89,7 @@ An honest, defensible answer, in order of weight:
 
 1. **The technical fit was equal.** Both platforms can run a disposable box per job. I did not choose Vercel because Railway couldn't do it.
 2. **Cost shape.** Vercel Hobby is $0 idle with a hard cap; at 3 to 5 demos a month I'd use a small share of every allowance. Railway would use credit for an always-on web service.
-3. **Consolidation.** The only live Railway service is the Fourth Official, a Next.js app, and wedding-invitation is already documented on Vercel. Moving it could end the $5 plan. Not done yet.
+3. **Consolidation.** The Fourth Official, a Next.js app, is the only Railway service known to be live (chat-app's worker and Redis have an unknown running state; see the workspace deployed-services file), and wedding-invitation is already documented on Vercel. Moving it could end the $5 plan. Not done yet.
 4. **Learning goal.** I chose a platform I hadn't used for this workload, to broaden what I can talk about.
 5. **Trade-off I accepted.** More code (create, wait, collect, clean up) and a newer product with limits I hadn't verified, so a spike gates the dependency, with Railway as the fallback.
 6. **What would have made me pick Railway.** If chat-app or FrontRow came back (workers, Redis, Spring Boot), or if the spike failed, or if I wanted the least code to ship in a week.
