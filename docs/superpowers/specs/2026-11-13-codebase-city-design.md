@@ -1,7 +1,7 @@
 # Codebase City: Design
 
 **Date:** 2026-11-13
-**Status:** Draft, awaiting Markus's approval. No product code until approved.
+**Status:** Approved by Markus on 2026-11-13. Next artifact: the implementation plan (`superpowers:writing-plans`), on this docs branch.
 **Inputs:** `docs/requirements-seed.md` (decisions D1 to D7 and the v1 scope are settled and not re-opened here), `docs/adr/ADR-001-host-on-vercel.md`, the 2026-11-13 design conversation.
 
 Attribution: **(Markus)** is a decision or words from Markus. **(my call)** is a choice I made on his behalf; he can overrule any of them. Measured results are marked **(measured)**; web-sourced facts that were not read on the vendor's own page are marked **(unverified)**.

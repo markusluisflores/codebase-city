@@ -6,7 +6,7 @@ Global workflow rules live in `~/.claude/CLAUDE.md` and apply here automatically
 
 ## Status
 
-Design phase. Requirements are in `docs/requirements-seed.md` (decisions D1-D7 and the v1 scope are settled; do not re-open them). The design doc is the next artifact. No product code, scaffold or app dependencies until Markus approves it.
+Design approved 2026-11-13 (`docs/superpowers/specs/2026-11-13-codebase-city-design.md`). Requirements are in `docs/requirements-seed.md` (decisions D1-D7 and the v1 scope are settled; do not re-open them). Next: the implementation plan, then merge the docs branch before any implementation branch. No product code, scaffold or app dependencies until then.
 
 ## Constraints
 
