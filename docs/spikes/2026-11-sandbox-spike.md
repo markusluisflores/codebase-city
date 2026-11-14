@@ -8,7 +8,7 @@
 | (b) Clone and `git log`, express | **1.24 s** with the shallow clone (create, clone, log); 1.35 s for a full blobless history clone of all 6,186 commits (limit 60 s) | pass |
 | (c) Work continues after the `POST` returned | `after()` in a route with `maxDuration = 300` kept writing a heartbeat to Postgres every 10 s, last write at **270 s** (28 rows), so it was not cut at or before the 240 s cap. The 300 s limit itself was not reached, so whether it applies to the continuation is untested; Fluid compute status was not checked (docs: default for new projects), and I did not test without `maxDuration` or with Fluid off. Docs: Hobby is 300 s default and maximum with Fluid compute. The detached-plus-callback fallback is not needed at the 240 s cap. | pass at 240 s |
 | (d) Read back 5 MB | 5.0 MB (4,999,781 bytes) in **0.41 s** via stdout and via `readFileToBuffer` | pass |
-| (e) Egress limit | tested with curl only, not a git clone under the policy; `networkPolicy: { allow: ["github.com", "*.github.com"] }`: github.com returned 200; example.com and registry.npmjs.org failed (curl exit 6) | pass |
+| (e) Egress limit | tested with curl only, not a git clone under the policy (not verified); `networkPolicy: { allow: ["github.com", "*.github.com"] }`: github.com returned 200; example.com and registry.npmjs.org failed (curl exit 6) | pass |
 | (f) Shallow vs full clone | Shallow clone (`--shallow-since=2024-11-02`) listed **1** boundary commit, dropped; 191 commits used, 95 files changed. Per-file change counts equal a full clone's log for the same hashes: **0 of 95 files differ** | pass |
 | (g) `--use-mailmap` | express has no `.mailmap`, so tested on numpy (47,585 log lines): 0.43 s plain vs 0.49 s with mailmap, **+0.06 s** (limit 5 s). In a `--no-checkout` clone git does not see the file; it needs `-c mailmap.blob=HEAD:.mailmap`, which fetches one blob | pass |
 | (h) Hobby allowance | Vercel docs (https://vercel.com/docs/sandbox/pricing, updated 2026-09-10; docs only, which the plan allows): **5 Active CPU hours a month** (CPU time, not wall clock; I/O wait does not count), 5,000 creations a month, **10 concurrent** sandboxes, 45-minute sessions, 4 vCPU and 8 GB maximum. Hobby pauses Sandbox creation past the quota and never bills. The 150-minute threshold is read as 150 CPU-minutes; 5 hours is 300 CPU-minutes. The dashboard usage page was not checked | pass |
@@ -23,10 +23,10 @@
 - **Clone strategy confirmed:** the shallow clone with boundary commits dropped gives identical counts. Keep it.
 - **Mailmap on:** pass `-c mailmap.blob=<headSha>:.mailmap` with `--use-mailmap` (measured with `HEAD:`); the `--no-checkout` clone has no working-tree `.mailmap`.
 - **Job wait (a) confirmed:** continue in `after()` with `maxDuration = 300`; the callback variant is not needed.
-- **Budget:** the Hobby quota is 5 Active CPU hours, not about 300 wall-clock minutes. A job here used well under a minute of wall time, so 60 jobs a month fits with large headroom.
+- **Budget (estimate, not measured):** the Hobby quota is 5 Active CPU hours (300 CPU-minutes), not about 300 wall-clock minutes. The spike timed one clone and log (about 1 s of wall time) but not CPU time or a full job, so whether 60 jobs a month fit is unconfirmed; Task 9 measures it.
 - **Deploying from the CLI** from inside `spikes/sandbox` worked with Root Directory left empty (the plan said `spikes/sandbox`; that doubles the path for CLI deploys).
 - **Cleanup:** the spike project and its Neon database can be reused for the real app in Task 12b or deleted; the preview deployments are throwaway.
 
 ## Not verified
 
-Fluid compute toggled off; whether `maxDuration` is needed (docs say the 300 s default applies with Fluid); Neon free storage limit; the Hobby dashboard usage page; gzip versus the 4.5 MB response limit; real ingestion output (sizes come from a stand-in script).
+A git clone under the network policy (only curl was tested); job CPU time and a full job (only a 1 s clone and log was timed); that the team plan is Hobby in the dashboard; Fluid compute toggled off; the 300 s limit itself; whether `maxDuration` is needed (docs say the 300 s default applies with Fluid); Neon free storage limit; the Hobby dashboard usage page; gzip versus the 4.5 MB response limit; real ingestion output (sizes come from a stand-in script).

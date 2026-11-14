@@ -41,7 +41,7 @@ Codebase City analyses a public GitHub repo by cloning it and reading `git log`.
 
 ## What would change this decision
 
-* The spike shows slow Sandbox start-up or limits too tight for a normal demo.
+* (Spike result 2026-11-14: start-up and limits are fine for a normal demo; this would now need a later change in Sandbox limits or pricing.)
 * Markus revives chat-app or FrontRow (long-running workers, Redis, Spring Boot): Railway then holds more of the portfolio and the consolidation argument weakens.
 * Traffic grows enough that Hobby's hard cap bites, forcing Pro at $20 a month plus per-use charges (uncapped overage).
 * A later security or terms finding on either platform.
