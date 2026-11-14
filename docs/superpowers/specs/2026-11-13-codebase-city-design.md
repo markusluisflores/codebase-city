@@ -80,20 +80,20 @@ Pieces:
 
 **Clone strategy (my call, to be validated in the spike):** `git clone --filter=blob:none --no-checkout --shallow-since=<latest commit date minus 24 months>`, so the clone is bounded by the window, not by total history. Shallow boundary commits look like "everything added" and would inflate every file's churn, so the ingestion module drops the commits listed in the repo's shallow file. If the spike shows this does not work reliably, fall back to a full blobless history clone with the pre-clone caps below.
 
-**Head SHA race (my call):** the GitHub API call and the clone are separate moments, so a push can land between them. The job is given the SHA the API reported and runs `git log` starting from that SHA (not from the clone's current default branch); if that SHA is absent from the clone the job fails with `clone_failed`. The runner then checks that the returned `repo.owner`, `repo.name` and `repo.headSha` equal the request, else `invalid_output`. The file list is the GitHub API tree filtered to blobs (directories and submodule entries dropped), the same source as the sizes, so the list and the SHA agree.
+**Head SHA race (my call):** the GitHub API call and the clone are separate moments, so a push can land between them. The job is given the SHA the API reported and runs `git log` starting from that SHA (not from the clone's current default branch); if that SHA is absent from the clone the job fails with `stale_head`. The runner then checks that the returned `repo.owner`, `repo.name` and `repo.headSha` equal the request, else `invalid_output`. The file list is the GitHub API tree filtered to blobs (directories and submodule entries dropped), the same source as the sizes, so the list and the SHA agree.
 
-**Where the job waits (spike decides):** (a) `POST` creates the job row, returns the job id immediately, and continues the work in `waitUntil` or Next.js `after`; the continuation is bounded by the Hobby function limit of 300 seconds, so the analysis cap is 240 seconds. Whether the 300 s limit applies to that continuation is **unverified**, and spike item (c) must test it; or (b) the Sandbox runs detached and posts to a signed callback. Default to (a); use (b) only if the spike shows (a) does not fit. **(my call)**
+**Where the job waits (spike decides):** (a) `POST` creates the job row, returns the job id immediately, and continues the work in `waitUntil` or Next.js `after`; the continuation is bounded by a Hobby function limit of 300 seconds (**unverified**; the guide marks it secondary), which the analyse route must request with `export const maxDuration = 300`, and Fluid compute must be enabled for that to apply (both **unverified**; spike item (c) tests them), so the analysis cap is 240 seconds. Whether the 300 s limit applies to that continuation is **unverified**, and spike item (c) must test it; or (b) the Sandbox runs detached and posts to a signed callback. Default to (a); use (b) only if the spike shows (a) does not fit. **(my call)**
 
 **Safety rules**
 - Only `https://github.com/<owner>/<repo>`. The clone URL is built by us from the parsed owner and repo, never passed through from the user. Names must match `^[A-Za-z0-9._-]+$`, must start with an alphanumeric character, and `.` and `..` are rejected; `owner` and `repo` are passed to the job script after `--`. **(my call)**
 - Clone with `--filter=blob:none --no-checkout`, so no working tree exists and no hook or filter can run. Disable hooks and credential helpers (`-c core.hooksPath=/dev/null`, no terminal prompts). Repo content is only ever read as text output.
 - The Sandbox network policy allows only github.com if the product supports it (verify in the spike).
-- Pre-clone caps from the GitHub API, so the expensive step never starts for an obvious outlier: repo size, **total** commit count (starting value 50,000, code `too_many_commits`; new, my call), files at HEAD, and a truncated tree is a hard reject. Post-clone caps, enforced by the job: **commits in the window** (20,000, code `too_many_commits_in_window`) and the 240-second wall clock. The two commit caps are separate because a repo with a long history but a small window is cheap with the shallow clone. Each failure maps to a specific message (section 11).
+- Pre-clone caps from the GitHub API, so the expensive step never starts for an obvious outlier: repo size, **total** commit count (starting value 50,000, code `too_many_commits`; new, my call), files at HEAD (starting value 10,000; reduced from 20,000, my call), and a truncated tree is a hard reject. Post-clone caps, enforced by the job: **commits in the window** (20,000, code `too_many_commits_in_window`) and the 240-second wall clock. The two commit caps are separate because a repo with a long history but a small window is cheap with the shallow clone. Each failure maps to a specific message (section 11).
 - Global caps on live analyses, kept in Postgres, fail closed with "demo limit reached": **10 a day and 60 a month** as starting values. At the roughly 2 minutes of Sandbox time per job assumed earlier, 60 jobs is about 120 of the roughly 300 minutes a month reported for Hobby (**unverified**), leaving headroom. Tune after the spike. **(my call)**
 - The viewer route `/r/<owner>/<repo>` validates the name with the same pattern and resolves it as in section 5 (gallery JSON, then the Postgres row). It never calls GitHub or starts a job; an uncached repo shows the password prompt.
 - There is no cache eviction in v1 (decision stands; one row per repo and schema version, replaced on re-analysis). Storage and response size are unverified: the spike (item i) measures the largest analysis JSON and the API response size against any Vercel response-size limit, and the free-tier storage limit. If the database is full the write fails after the Sandbox run was spent; the job then fails with a clear message and the quota is released. **(my call)**
 - The Sandbox is destroyed after every job, success or not, and also has its own timeout (flow step 6).
-- Payload limits (my call): ingestion truncates author names to 200 characters and skips any file whose path exceeds 1,024 characters, counting those in `stats.capsHit` as `path_too_long`, so one oddly named file does not fail the analysis. Likewise `districts` is truncated to the 2,000 with the most changes and `districts_truncated` is recorded in `stats.capsHit` (my call). The `capsHit` codes are `path_too_long` and `districts_truncated`. The schema bounds the total serialised `Analysis` at 8 MB, and the runner caps Sandbox stdout at 8 MB and raises `invalid_output` beyond it.
+- Payload limits (my call): ingestion truncates author names to 200 characters and skips any file whose path exceeds 1,024 characters, counting those in `stats.capsHit` as `path_too_long`, so one oddly named file does not fail the analysis. Likewise `districts` is truncated to the 2,000 with the most changes, ties broken by path ascending, and `districts_truncated` is recorded in `stats.capsHit` (my call). The `capsHit` codes are `path_too_long` and `districts_truncated`. The schema bounds the total serialised `Analysis` at 8 MB (at about 400 bytes per file, 10,000 files is about 4 MB, under the bound; the spike measures it, and the viewer fetches analyses gzip-compressed, unverified), and the runner caps Sandbox stdout at 8 MB and raises `invalid_output` beyond it.
 
 ## 7. Data
 
@@ -126,7 +126,7 @@ Pieces:
 
 ## 9. Rendering
 
-- **Layout:** squarified treemap (d3-hierarchy) for the 2D view, area equals size. For the 3D city, districts are folders at depth 1 and 2 only (a depth-2 district nests inside its depth-1 parent), matching `Analysis.districts`, and are laid out by a treemap of file count, files are equal-footprint buildings in a grid within their district, and height is size on a square-root scale. Both views share the same `Analysis`. **(my call)**
+- **Layout:** squarified treemap (d3-hierarchy) for the 2D view, area equals size, drawn on a canvas 2D context and capped at the same 5,000 rectangles with small files merged (my call). For the 3D city, districts are folders at depth 1 and 2 only (a depth-2 district nests inside its depth-1 parent), matching `Analysis.districts`; files directly in the repo root, and files directly in a depth-1 folder that also has depth-2 subfolders, go into a layout-only pseudo-district named "(files)" under their parent, which is not listed in `Analysis.districts` (my call); districts are laid out by a treemap of file count, files are equal-footprint buildings in a grid within their district, and height is size on a square-root scale. Both views share the same `Analysis`. **(my call)**
 - **3D:** Three.js, one instanced mesh for all buildings, per-instance colour, orbit camera, hover tooltip, search, click for details. Co-change arcs drawn as curves for the selected file only. Library wrapper (plain Three.js or react-three-fiber) is the builder's call.
 - **Cap:** at most 5,000 buildings **including** the per-district "other" buildings; remaining small files in a folder merge into one "other" building for that district. **(my call)** Target 60 frames a second on a mid laptop with a 5,000 building city.
 - **Colour modes:** hotspot, churn, age, bug-fix density, language, ownership, each with a legend and a one-line "this is a heuristic" note. Ownership mode uses distinct colours for the top 8 authors by file-touches and one neutral "others" colour (different from the "no activity" grey), and single-owner districts get a visible outline or badge in both the city and the treemap, explained in the ownership legend. **(my call)** In age mode cold files take the stalest bucket and the legend labels it "older than window"; in the other history-based modes the legend includes the grey "no activity in window" stop. **(my call)**
@@ -144,19 +144,40 @@ Pieces:
 
 ## 11. Error and empty states
 
-Each cap or failure has its own message and no stack trace: not a public GitHub repo; repo too large (shows the cap); too many commits (total, checked before cloning); too many commits in window (checked after cloning); too many files; clone timed out; GitHub API rate-limited; daily demo limit reached; wrong password (rate-limited attempts). A repo with fewer than 20 commits in the window renders but shows a "thin history" note on every history-based colour mode.
+Each cap or failure has its own code and message, and no message contains a stack trace or an internal path (my call; the Task 12b test asserts both):
+
+| Code | Message |
+| ---- | ------- |
+| `not_found` | We couldn't find a public GitHub repository with that name. |
+| `repo_too_large` | This repository is larger than the 1 GB limit for live analysis. |
+| `too_many_commits` | This repository has more than 50,000 commits, which is over the live analysis limit. |
+| `too_many_commits_in_window` | This repository has more than 20,000 commits in the last 24 months, which is over the live analysis limit. |
+| `too_many_files` | This repository has more than 10,000 files, which is over the live analysis limit. |
+| `tree_truncated` | GitHub returned only part of this repository's file list, so it is too large to analyse live. |
+| `clone_failed` | We couldn't fetch this repository's history. Please try again. |
+| `stale_head` | The repository changed while we were analysing it. Please try again. |
+| `invalid_output` | The analysis produced a result we couldn't use, so nothing was saved. Please try again. |
+| `timeout` | The analysis took longer than the 4-minute limit and was stopped. |
+| `github_rate_limited` | GitHub is limiting requests right now. Please try again in a few minutes. |
+| `daily` | The daily demo limit has been reached. Please try again tomorrow (UTC). |
+| `monthly` | The monthly demo limit has been reached. Please try again next month. |
+| `db_write_failed` | The analysis finished but we couldn't save it, so it did not count against the demo limit. Please try again later. |
+| `wrong_password` | That password is not correct. |
+| `too_many_attempts` | Too many attempts. Wait a minute and try again. |
+
+A failed database write fails the job with `db_write_failed` and releases the quota. A repo with fewer than 20 commits in the window renders but shows a "thin history" note on every history-based colour mode.
 
 ## 12. Testing, process and plan
 
 - **Tests:** unit tests for the ingestion module on fixture repos created by a script (init a repo, make scripted commits) so results are deterministic and offline; unit tests for URL validation, the bug-fix matcher, co-change and the session module; a small component test for the colour legend. No test depends on the network. Database tests run on PGlite (real Postgres compiled to WASM) so the partial unique index and concurrency follow Postgres semantics; PGlite support for partial unique indexes is unverified, with a Testcontainers Postgres as the fallback. **(my call)** The Sandbox integration is checked by the spike and one manual end-to-end run.
 - **Tier:** Standard. Auth is on the global Mandatory list, but this is a single shared demo password with no accounts, no personal data and no spend beyond hosting caps. **Confirmed by Markus on 2026-11-13: Standard**, plus `/security-review` on the ingestion boundary and the gate.
 - **Stack-specific setup deferred until this is approved:** formatter hook, test framework, CI, CodeQL, quality baseline (gitleaks, device-path check), C4 diagram, Dependabot npm entry.
-- **Rough plan:** Day 0 spike (Sandbox start-up, limits, network policy, whether a function's background continuation can run 240 s, how the finished JSON is read back from the Sandbox, whether `--shallow-since` plus dropping boundary commits gives correct churn, `--use-mailmap` cost, size of a stored analysis and of the API response). Day 1 ingestion module and tests. Days 2 to 3 layout and rendering. Day 4 colour modes, details, report card, co-change arcs. Day 5 ownership, gallery build, gate, deploy, README and demo GIF. Day 6 buffer. Time slider only if Day 6 is free.
+- **Rough plan (matches the plan's task order):** Day 0 spike (Task 0: Sandbox start-up, limits, network policy, whether a function's background continuation can run 240 s with `maxDuration` 300 and Fluid compute, how the finished JSON is read back, shallow clone plus dropped boundary commits, `--use-mailmap` cost, size of a stored analysis and of the API response, plus creating the Vercel project, the Marketplace Postgres and the sensitive variable names, and checking the Sandbox job bundle ships with the function). Day 1 Tasks 1 to 8 (scaffold, schema, fixtures, parser, metrics, co-change, report, orchestrator). Day 2 Tasks 9 to 12b (live analysis: Sandbox job and runner, GitHub client and caps, gate, database layer, API routes). Days 3 to 4 Tasks 13 to 15b (viewer: layout, rendering, viewer UI and states). Day 5 Task 16 (gallery, deploy, README). Day 6 buffer. Time slider only if Day 6 is free. **Cut line:** if Task 15b is not finished by the end of Day 4, Markus decides what to cut; candidates are arc polish, search, the 2D view's extras and accessibility extras beyond the minimum. Nothing is cut automatically, and none of the seed's v1 features is cut without his decision. **(my call)**
 - **Demo packaging:** live link, README with demo GIF, Mermaid architecture diagram, decisions and trade-offs section, known limitations (rename history, heuristics, caps), no secrets in the repo.
 
 ## 13. Open for the builder
 
-Sandbox job mechanics beyond what the spike shows; Postgres partner; Three.js wrapper; exact caps (starting values: repo size 1 GB by API, 50,000 total commits (pre-clone), 20,000 commits in window (post-clone), 20,000 files, 5,000 rendered buildings, 240 s) to tune on real repos; which 6 to 8 repos go in the gallery (suggested: a few well-known repos plus Markus's own, chosen to show different shapes); colours and visual styling (run the `design-process` skill before UI work); whether to commit or regenerate gallery JSON.
+Sandbox job mechanics beyond what the spike shows; Postgres partner; Three.js wrapper; exact caps (starting values: repo size 1 GB by API, 50,000 total commits (pre-clone), 20,000 commits in window (post-clone), 10,000 files, 5,000 rendered buildings, 240 s) to tune on real repos; which 6 to 8 repos go in the gallery (suggested: a few well-known repos plus Markus's own, chosen to show different shapes); colours and visual styling (run the `design-process` skill before UI work); whether to commit or regenerate gallery JSON.
 
 ## 14. Calls made on Markus's behalf, to check while reading
 
@@ -177,7 +198,7 @@ Sandbox job mechanics beyond what the spike shows; Postgres partner; Three.js wr
 15. Cache keyed by `(owner, name, schemaVersion)` with `headSha` and `analysedAt` stored; viewer resolves gallery JSON, then Postgres, never GitHub; re-analysis replaces the row.
 16. Two commit caps: 50,000 total (pre-clone) and 20,000 in the window (post-clone, `too_many_commits_in_window`).
 17. Job reuse for the same repo; quota reserved at job start and released on failure; non-terminal jobs older than 5 minutes read as failed; Sandbox timeout equals the job deadline.
-18. The job runs `git log` from the API's head SHA and fails `clone_failed` if it is absent; the runner checks the returned repo fields.
+18. The job runs `git log` from the API's head SHA and fails `stale_head` if it is absent; the runner checks the returned repo fields.
 19. Rate-limit store is a `login_attempts` table; cookie `HttpOnly; Secure; SameSite=Lax`; job ids are random UUIDs.
 20. Repo name rule: alphanumeric first character, `.` and `..` rejected, arguments passed after `--`.
 21. The 5,000 building cap includes "other" buildings.
@@ -193,3 +214,9 @@ Sandbox job mechanics beyond what the spike shows; Postgres partner; Three.js wr
 31. Database tests on PGlite, Testcontainers as the fallback; the stale-job rule also runs inside `createOrReuseJob` and on every POST.
 32. The GitHub file link is `https://github.com/<owner>/<repo>/blob/<headSha>/<path>` with encoded segments.
 33. `districts` truncated to the 2,000 with the most changes, recorded as `districts_truncated`; the city layout forms districts at depth 1 and 2 only.
+34. Day plan follows the task order, with a cut line at the end of Day 4 that Markus decides.
+35. Files-at-HEAD cap reduced from 20,000 to 10,000; payload sizing argument (about 400 bytes per file, gzip on fetch).
+36. The analyse route sets `maxDuration = 300` and needs Fluid compute (both unverified).
+37. Exact error messages and codes, including `stale_head` and `db_write_failed`; the job reports `stale_head` (not `clone_failed`) when the SHA is absent.
+38. Districts truncation tie-break is path ascending.
+39. Layout-only "(files)" pseudo-districts for root files and files beside depth-2 subfolders; the 2D view is a canvas capped at 5,000 rectangles.
