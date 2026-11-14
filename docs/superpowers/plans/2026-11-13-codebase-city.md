@@ -252,4 +252,4 @@ Needs a Vercel account and a Marketplace Postgres; Markus creates them and suppl
 - **Type consistency:** `Commit`, `FileStat`, `CoChange`, `Report`, `Analysis`, `RepoMeta`, `ColourMode` are defined once (Tasks 2, 4, 8, 14) and reused by name. `parseAnalysis` is the single validator (Tasks 2, 8, 9).
 - **Plan-level calls not in the spec** (for Markus to check): the report-card ignore list (Review Focus 1); `-z` parsing; one branch per task group; a spike gate that can stop the plan.
 - **Tooling:** commit subjects above are written to the 72-character header limit and the type list in the standard; they get run through the real commitlint hook once Task 1 installs it.
-- **Proportion:** about 250 lines against a spec of about 190; code blocks are signatures and test descriptions, not bodies.
+- **Proportion:** 167 lines against a spec of 125; code blocks are signatures and test descriptions, not bodies.
