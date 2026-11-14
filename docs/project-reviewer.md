@@ -19,7 +19,7 @@ Nothing yet. The plan: paste a public GitHub repo URL and get a 3D city plus a 2
 | Git analysis | Plain TypeScript module, run inside a Vercel Sandbox | Planned; Sandbox spike outstanding |
 | Database / cache | Postgres via a Vercel Marketplace partner (for example Neon) | Planned, not chosen |
 | Front end | Next.js with Three.js and a 2D treemap | Decided in the design (2026-11-13) |
-| Access model | Public gallery of cached cities; adding a new repo is password-protected | Decided 2026-11-13 (Markus: "make it public, while the adding of repos password protected") | Decided; tier is Standard (confirmed by Markus 2026-11-13), with a security review on the ingestion boundary and the gate |
+| Access model | Public gallery of cached cities; adding a new repo is password-protected | Decided 2026-11-13 (Markus: "make it public, while the adding of repos password protected"); tier is Standard (confirmed by Markus 2026-11-13), with a security review on the ingestion boundary and the gate |
 
 ---
 
