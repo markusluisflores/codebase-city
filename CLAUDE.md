@@ -6,7 +6,7 @@ Global workflow rules live in `~/.claude/CLAUDE.md` and apply here automatically
 
 ## Status
 
-Design approved 2026-11-13 (`docs/superpowers/specs/2026-11-13-codebase-city-design.md`) and implementation plan written (`docs/superpowers/plans/2026-11-13-codebase-city.md`). Requirements are in `docs/requirements-seed.md` (decisions D1-D7 and the v1 scope are settled; do not re-open them). PR #1 (`docs/requirements-seed`) is open and its review is in progress. Next: merge PR #1 into `main`, then Task 0 (Sandbox spike), then the implementation branches in the plan. No product code, scaffold or app dependencies until the docs PR is merged.
+Design approved 2026-11-13 (`docs/superpowers/specs/2026-11-13-codebase-city-design.md`) and implementation plan written (`docs/superpowers/plans/2026-11-13-codebase-city.md`). Requirements are in `docs/requirements-seed.md` (decisions D1-D7 and the v1 scope are settled; do not re-open them). Next: merge the docs PR into main, then Task 0 (Sandbox spike), then the implementation branches in the plan. No product code, scaffold or app dependencies until the docs PR is merged.
 
 ## Constraints
 

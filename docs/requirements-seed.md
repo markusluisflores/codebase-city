@@ -1,6 +1,7 @@
 # Codebase City: Requirements Seed
 
-> **Status:** seed from a brainstorm session on 2026-11-13. **Not an approved design.** It records what was decided and what is still open, so the next session starts from files, not from chat history.
+> **Superseded by the approved design at `superpowers/specs/2026-11-13-codebase-city-design.md` (approved 2026-11-13); decisions D1-D7 and the v1 scope remain settled.** The status and next-step lines below are the point-in-time record from the brainstorm.
+> **Status (at the time):** seed from a brainstorm session on 2026-11-13. **Not an approved design.** It records what was decided and what is still open, so the next session starts from files, not from chat history.
 > **Origin:** idea #1 of 10 in `portfolio-project-ideas.md` at the ClaudeProjects workspace root, `../../portfolio-project-ideas.md` from this file (ranked shortlist, rationale and sources are there).
 > **Next step:** this is the *requirements* half of the brainstorm. The next session still has to lay out the build approaches, get one picked, then write the design doc and get it approved. Per the global workflow, the first branch is `docs/<description>`, and this file should be committed there after `new-project` bootstrap.
 
