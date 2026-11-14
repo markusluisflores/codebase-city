@@ -1,0 +1,32 @@
+# Sandbox spike findings (Task 0)
+
+**Date:** 2026-11-14. **Verdict: Vercel Sandbox works for the design. ADR-001 stands; no Railway fallback needed.** Items (b), (c) and (e) pass, and the Hobby allowance (h) is above the 150-minute threshold, so the stop condition in Task 0 Step 2 did not fire. The spike code was throwaway (`spike/sandbox`, never merged). Test repo: `expressjs/express` (6,186 commits; 191 in the 24-month window); a second repo, `django/django` (7,102 files), for sizes. Sandbox SDK `@vercel/sandbox` 3.9.1, Next.js 16.4.6.
+
+| Item | Result | Pass? |
+| ---- | ------ | ----- |
+| (a) Create to first command | 0.63, 0.40, 0.40, 0.83, 0.52 s; median **0.52 s** (limit 20 s) | pass |
+| (b) Clone and `git log`, express | **1.24 s** with the shallow clone (create, clone, log); 1.35 s for a full blobless history clone of all 6,186 commits (limit 60 s) | pass |
+| (c) Work continues after the `POST` returned | `after()` in a route with `maxDuration = 300` kept writing a heartbeat to Postgres every 10 s, last write at **270 s** (28 rows), so it was not cut before the 240 s cap. Fluid compute was the project default; I did not test without `maxDuration` or with Fluid off. Docs: Hobby limit is 300 s default and maximum with Fluid compute. The detached-plus-callback fallback is not needed. | pass |
+| (d) Read back 5 MB | 5.0 MB (4,999,781 bytes) in **0.41 s** via stdout and via `readFileToBuffer` | pass |
+| (e) Egress limit | `networkPolicy: { allow: ["github.com", "*.github.com"] }`: github.com returned 200; example.com and registry.npmjs.org failed (curl exit 6) | pass |
+| (f) Shallow vs full clone | Shallow clone (`--shallow-since=2024-11-02`) listed **1** boundary commit, dropped; 191 commits used, 95 files changed. Per-file change counts equal a full clone's log for the same hashes: **0 of 95 files differ** | pass |
+| (g) `--use-mailmap` | express has no `.mailmap`, so tested on numpy (47,585 log lines): 0.43 s plain vs 0.49 s with mailmap, **+0.06 s** (limit 5 s). In a `--no-checkout` clone git does not see the file; it needs `-c mailmap.blob=HEAD:.mailmap`, which fetches one blob | pass |
+| (h) Hobby allowance | Vercel docs (updated 2026-09-10): **5 Active CPU hours a month** (CPU time, not wall clock; I/O wait does not count), 5,000 creations a month, **10 concurrent** sandboxes, 45-minute sessions, 4 vCPU and 8 GB maximum. Hobby pauses Sandbox creation past the quota and never bills. The dashboard usage page was not checked | pass |
+| (i) Size | Analysis-shaped JSON built by a throwaway script (no real ingestion yet; authors shares, top-5 co-change included): express 216 files **54 KB** (250 B/file); django 7,102 files **1.65 MB** (233 B/file), 119 KB gzip. Extrapolated to 10,000 files about 2.4 MB, within the 8 MB bound; a worst case with dense co-change is still under 8 MB. Stored in Postgres `jsonb`: express 10 KB, django **242 KB** (compressed). Vercel Functions cap a non-streamed response body at **4.5 MB**, which a near-10,000-file analysis could approach uncompressed: serve it streamed, or confirm gzip is counted, in Task 12b. Neon free-tier storage limit not verified | pass (see response-size note) |
+| (j) Hobby terms | Vercel's terms (Hobby plan section) restrict Hobby to "personal or non-commercial use". A portfolio demo fits; revisit if it ever earns money | recorded |
+| (k) Sandbox image | git 2.53.0, Node v24.22.3, Ubuntu 26.04. The bundled job can target Node 24 (at least 20) | recorded |
+| (l) Vercel project, Postgres, variables | Project `codebase-city-spike` (team `markus-flores-projects`); Neon Postgres (Marketplace) connected, `DATABASE_URL` injected with Postgres connection variables; `DEMO_PASSWORD`, `SESSION_SECRET` and `GITHUB_TOKEN` created Sensitive with placeholder values for production and preview (real values still to be set). The Sandbox token is `VERCEL_OIDC_TOKEN`, from `vercel env pull`; no other Sandbox credential was needed | done |
+| (m) File tracing | `outputFileTracingIncludes: { "/api/trace": ["./data/standin.txt"] }`: the file was present and readable in a deployed preview function | pass |
+
+## Changes this makes to the design
+
+- **Clone strategy confirmed:** the shallow clone with boundary commits dropped gives identical counts. Keep it.
+- **Mailmap on:** pass `-c mailmap.blob=HEAD:.mailmap` with `--use-mailmap`; the `--no-checkout` clone has no working-tree `.mailmap`.
+- **Job wait (a) confirmed:** continue in `after()` with `maxDuration = 300`; the callback variant is not needed.
+- **Budget:** the Hobby quota is 5 Active CPU hours, not about 300 wall-clock minutes. A job here used well under a minute of wall time, so 60 jobs a month fits with large headroom.
+- **Deploying from the CLI** from inside `spikes/sandbox` worked with Root Directory left empty (the plan said `spikes/sandbox`; that doubles the path for CLI deploys).
+- **Cleanup:** the spike project and its Neon database can be reused for the real app in Task 12b or deleted; the preview deployments are throwaway.
+
+## Not verified
+
+Fluid compute toggled off; whether `maxDuration` is needed (docs say the 300 s default applies with Fluid); Neon free storage limit; the Hobby dashboard usage page; gzip versus the 4.5 MB response limit; real ingestion output (sizes come from a stand-in script).
