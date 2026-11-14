@@ -6,14 +6,14 @@ Global workflow rules live in `~/.claude/CLAUDE.md` and apply here automatically
 
 ## Status
 
-Design approved 2026-11-13 (`docs/superpowers/specs/2026-11-13-codebase-city-design.md`). Requirements are in `docs/requirements-seed.md` (decisions D1-D7 and the v1 scope are settled; do not re-open them). Next: the implementation plan, then merge the docs branch before any implementation branch. No product code, scaffold or app dependencies until then.
+Design approved 2026-11-13 (`docs/superpowers/specs/2026-11-13-codebase-city-design.md`) and implementation plan written (`docs/superpowers/plans/2026-11-13-codebase-city.md`). Requirements are in `docs/requirements-seed.md` (decisions D1-D7 and the v1 scope are settled; do not re-open them). PR #1 (`docs/requirements-seed`) is open and its review is in progress. Next: merge PR #1 into `main`, then Task 0 (Sandbox spike), then the implementation branches in the plan. No product code, scaffold or app dependencies until the docs PR is merged.
 
 ## Constraints
 
-- Tier: Standard. Revisit toward Mandatory in the design if cloning untrusted repos runs on a server.
+- Tier: Standard, confirmed by Markus on 2026-11-13, plus `/security-review` on the ingestion boundary and the password gate.
 - Budget: about one week of Claude Code time. Scope discipline matters; FrontRow overran on backend depth and review ceremony.
 - No Anthropic API key and no AI feature in v1.
-- Hosting: Vercel with Sandbox for the git work, decided 2026-11-13 (see `docs/adr/ADR-001-host-on-vercel.md`; the Sandbox spike is still outstanding). Rest of the stack and architecture: not chosen yet (see seed section 8, items 10 and 11). Stack-specific setup (formatter hook, test framework, CI, CodeQL, quality baseline, C4 diagram) is deferred until the design fixes the stack.
+- Hosting: Vercel with Sandbox for the git work, decided 2026-11-13 (see `docs/adr/ADR-001-host-on-vercel.md`; the Sandbox spike is still outstanding). Stack and architecture are fixed in the design (Next.js, TypeScript, Vitest, Postgres cache, Three.js, ingestion module run inside a Sandbox). Stack-specific setup (formatter hook, test framework, CI, CodeQL, quality baseline) is Task 1 of the plan and happens on the `chore/scaffold` branch after the docs PR merges.
 - Interview guide: `docs/project-reviewer.md` holds the hosting comparison and talking points; update it as decisions land.
 
 ## Conventions

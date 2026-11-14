@@ -1,7 +1,7 @@
 # Codebase City: Interview Guide
 
 **Last updated:** 2026-11-13
-**Last plan covered:** none yet. The project is in the design phase and nothing is built. This first version records the hosting research and the decision only.
+**Last plan covered:** none yet. The design is approved and the implementation plan is written (both on the open docs PR); nothing is built. This version records the hosting research, the decision and the design's trade-offs only.
 
 Everything here is drawn from the project's own artifacts: `docs/requirements-seed.md`, `docs/adr/ADR-001-host-on-vercel.md`, and the 2026-11-13 design conversation. Claims from web sources are marked **verified** (read on the vendor's own page or measured by us), **secondary** (a blog or aggregator) or **unverified**. Re-check any of them before quoting a number in an interview.
 
@@ -19,7 +19,7 @@ Nothing yet. The plan: paste a public GitHub repo URL and get a 3D city plus a 2
 | Git analysis | Plain TypeScript module, run inside a Vercel Sandbox | Planned; Sandbox spike outstanding |
 | Database / cache | Postgres via a Vercel Marketplace partner (for example Neon) | Planned, not chosen |
 | Front end | Next.js with Three.js and a 2D treemap | Planned, not confirmed |
-| Public gallery of cached cities; adding a new repo is password-protected | Decided 2026-11-13 (Markus: "make it public, while the adding of repos password protected") | Decided; tier question for the design still open |
+| Public gallery of cached cities; adding a new repo is password-protected | Decided 2026-11-13 (Markus: "make it public, while the adding of repos password protected") | Decided; tier is Standard (confirmed by Markus 2026-11-13), with a security review on the ingestion boundary and the gate |
 
 ---
 
@@ -112,7 +112,7 @@ An honest, defensible answer, in order of weight:
 
 **Simple version:** you're opening a stranger's package. You do it in a room with no valuables.
 
-**The longer version:** the tool clones user-supplied repositories. The design never checks out files or executes repo content, uses a URL allowlist (`https://github.com/...` only), size checks, timeouts and per-job cleanup. A Sandbox adds a second layer: the job runs in a fresh microVM with a restricted network policy, so even if something went wrong it holds no database credentials. On a single Railway service, git would run next to the web service's secrets, so we would rely on our own safeguards, or add a second secret-free service.
+**The longer version:** the tool clones user-supplied repositories. The design never checks out files or executes repo content, uses a URL allowlist (`https://github.com/...` only), size checks, timeouts and per-job cleanup. A Sandbox adds a second layer: the job runs in a fresh microVM with a restricted network policy (to be verified in the spike), so even if something went wrong it holds no database credentials. On a single Railway service, git would run next to the web service's secrets, so we would rely on our own safeguards, or add a second secret-free service.
 
 **Interview talking point:** "The risky part of the product is cloning repos I didn't write. Defence in depth: never check files out or run anything, validate the URL and size up front, time-box the job, and run it somewhere that holds no secrets. A disposable VM per job gives that last layer by default."
 
@@ -172,7 +172,7 @@ None yet. One early lesson: an assumption about "which projects are deployed whe
 | How did you decide how to read git history? | Concept 3 |
 | What does this cost to run, and what happens if it gets popular? | Concept 4 and concept 6 |
 | What would make you switch? | ADR-001, "What would change this decision" |
-| What's still unproven? | Sandbox spike (start-up time and limits), Hobby terms, and whether a shared demo password counts as auth under the tiering |
+| What's still unproven? | Sandbox spike (start-up time, limits, whether a background continuation can run 240 s, egress policy) and Hobby terms. Settled: the tier is Standard, confirmed by Markus on 2026-11-13, with a security review on the gate |
 
 ## 8. Sources
 
