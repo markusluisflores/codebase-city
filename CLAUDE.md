@@ -13,7 +13,7 @@ Design approved 2026-11-13 (`docs/superpowers/specs/2026-11-13-codebase-city-des
 - Tier: Standard, confirmed by Markus on 2026-11-13, plus `/security-review` on the ingestion boundary and the password gate.
 - Budget: about one week of Claude Code time. Scope discipline matters; FrontRow overran on backend depth and review ceremony.
 - No Anthropic API key and no AI feature in v1.
-- Hosting: Vercel with Sandbox for the git work, decided 2026-11-13 (see `docs/adr/ADR-001-host-on-vercel.md`; the Sandbox spike passed 2026-11-14; the 8 MB analysis size bound is still to be re-measured in Task 8 or 9). Stack and architecture are fixed in the design (Next.js, TypeScript, Vitest, Postgres cache, Three.js, ingestion module run inside a Sandbox). Stack-specific setup (formatter hook, test framework, CI, CodeQL, quality baseline) is Task 1 of the plan and happens on the `chore/scaffold` branch after the findings docs PR merges.
+- Hosting: Vercel with Sandbox for the git work, decided 2026-11-13 (see `docs/adr/ADR-001-host-on-vercel.md`; the Sandbox spike passed 2026-11-14; the 8 MB analysis size bound is still to be re-measured in Task 9). Stack and architecture are fixed in the design (Next.js, TypeScript, Vitest, Postgres cache, Three.js, ingestion module run inside a Sandbox). Stack-specific setup (formatter hook, test framework, CI, CodeQL, quality baseline) is Task 1 of the plan and happens on the `chore/scaffold` branch after the findings docs PR merges.
 - Interview guide: `docs/project-reviewer.md` holds the hosting comparison and talking points; update it as decisions land.
 
 ## Conventions

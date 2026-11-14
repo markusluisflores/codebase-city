@@ -130,7 +130,7 @@ An honest, defensible answer, in order of weight:
 
 **The longer version:** Vercel Hobby (verified, Vercel pricing page): $0, 100 GB bandwidth, 1M function invocations, 4 hours Active CPU, 360 GB-hours memory a month, and no way to buy more. Pro: $20 a month per seat with a $20 credit and pay-as-you-go overage, uncapped. Sandbox on Hobby gives 5 Active CPU hours a month (Vercel docs, checked in the 2026-11 spike). Our estimate for 3 to 5 demos a month at 5 uncached repos each: about 50 minutes of Sandbox time against the 5 CPU hours (300 CPU-minutes). The caps allow up to 60 jobs a month at about 2 minutes each, which is 120 minutes of wall time. Whether that fits 5 CPU hours (300 CPU-minutes) depends on CPU time, which the spike did not measure (it timed one clone and log at about 1 s, not a full job); on 2 vCPUs the worst case is 240 CPU-minutes, on 4 vCPUs 480, so Task 9 must measure it. That is the worst case, when every job is a cache miss. Bandwidth is a few percent, and negligible function memory for the Fourth Official. These are estimates, not measurements. The real risk is bots or an exposed link, which is why live analysis could sit behind a password with a public static gallery.
 
-**Interview talking point:** "I sized the free tier before choosing it. At a few demos a month I'd use well under a fifth of the Sandbox allowance, the worst case the caps allow (60 uncached jobs, about 120 minutes of wall time) could use between 40% and all of it depending on CPU use, which I would measure before relying on it, and the free plan's hard cap means the failure mode is a paused feature, not a surprise bill. The one thing that could change that is abuse of a public endpoint, so I'd gate the expensive path."
+**Interview talking point:** "I sized the free tier before choosing it. At a few demos a month I'd use well under a fifth of the Sandbox allowance (at 1 vCPU), the worst case the caps allow (60 uncached jobs, about 120 minutes of wall time) could use 40% of it or, on 4 vCPUs with busy jobs, exceed it, which I would measure before relying on it, and the free plan's hard cap means the failure mode is a paused feature, not a surprise bill. The one thing that could change that is abuse of a public endpoint, so I'd gate the expensive path."
 
 ### 5. Platform reputation and incidents
 
@@ -174,7 +174,7 @@ None yet. One early lesson: an assumption about "which projects are deployed whe
 | How did you decide how to read git history? | Concept 3 |
 | What does this cost to run, and what happens if it gets popular? | Concept 4 and concept 6 |
 | What would make you switch? | ADR-001, "What would change this decision" |
-| What's still unproven? | The 8 MB analysis size bound (re-measured in Task 8 or 9), and untested corners of the spike (Fluid compute off, the 300 s limit itself, git clone under the network policy). Settled by the 2026-11 spike: start-up 0.52 s, limits, a continuation to 270 s, egress policy, Hobby terms (personal or non-commercial). Settled: the tier is Standard, confirmed by Markus on 2026-11-13, with a security review on the gate |
+| What's still unproven? | The 8 MB analysis size bound (re-measured in Task 9), and untested corners of the spike (Fluid compute off, the 300 s limit itself, git clone under the network policy). Settled by the 2026-11 spike: start-up 0.52 s, limits, a continuation to 270 s, egress policy, Hobby terms (personal or non-commercial). Settled: the tier is Standard, confirmed by Markus on 2026-11-13, with a security review on the gate |
 
 ## 8. Sources
 
