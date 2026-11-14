@@ -1,7 +1,7 @@
 # Codebase City: Design
 
 **Date:** 2026-11-13
-**Status:** Approved by Markus on 2026-11-13. Next artifact: the implementation plan (`superpowers:writing-plans`), on this docs branch.
+**Status:** Approved by Markus on 2026-11-13. The implementation plan is written (`docs/superpowers/plans/2026-11-13-codebase-city.md`) and PR #1 holds both; next is merging the docs PR.
 **Inputs:** `docs/requirements-seed.md` (decisions D1 to D7 and the v1 scope are settled and not re-opened here), `docs/adr/ADR-001-host-on-vercel.md`, the 2026-11-13 design conversation.
 
 Attribution: **(Markus)** is a decision or words from Markus. **(my call)** is a choice I made on his behalf; he can overrule any of them. Measured results are marked **(measured)**; web-sourced facts that were not read on the vendor's own page are marked **(unverified)**.
@@ -93,6 +93,7 @@ Pieces:
 - The viewer route `/r/<owner>/<repo>` validates the name with the same pattern and resolves it as in section 5 (gallery JSON, then the Postgres row). It never calls GitHub or starts a job; an uncached repo shows the password prompt.
 - There is no cache eviction in v1 (decision stands; one row per repo and schema version, replaced on re-analysis). Storage and response size are unverified: the spike (item i) measures the largest analysis JSON and the API response size against any Vercel response-size limit, and the free-tier storage limit. If the database is full the write fails after the Sandbox run was spent; the job then fails with a clear message and the quota is released. **(my call)**
 - The Sandbox is destroyed after every job, success or not, and also has its own timeout (flow step 6).
+- Payload limits (my call): ingestion truncates author names to 200 characters and skips any file whose path exceeds 1,024 characters, counting those in `stats.capsHit` as `path_too_long`, so one oddly named file does not fail the analysis. The schema bounds the total serialised `Analysis` at 8 MB, and the runner caps Sandbox stdout at 8 MB and raises `invalid_output` beyond it.
 
 ## 7. Data
 
@@ -109,17 +110,18 @@ Pieces:
 **`Analysis` shape (schema-versioned JSON)**
 - `repo` (owner, name, head SHA, default branch), `window` (from, to, commits counted), `stats` (`{bugFixCommitShare, botCommitsExcluded, commitsInWindow, thinHistory, mailmapApplied, capsHit}`).
 - `files[]`: path, size, language (from extension), `changes`, `lastChanged`, `bugFixes`, top authors, at most 5 per file, with shares (each a hashed key, a display name and a share; **no email address is ever stored or served**, and no commit message beyond the bug-fix count), main author, `coChange[]` (up to 5: path, shared commits, score).
+- `districts[]` (at most 2,000): `{path, singleOwner, ownerKey, ownerName, ownerShare, changes}` for every folder at depth 1 or 2 from the repo root, computed server-side (section 8). **(my call)**
 - `report`: `readFirst[]`, `riskiest[]`, `forgotten[]` (10 each, computed server-side so they are deterministic and unit-testable).
-- Folders are derived in the browser from file paths.
+- Folders for layout are derived in the browser from file paths; the district ownership flags are not, they come from `districts`.
 
 ## 8. Analysis rules (all my calls, all labelled as heuristics in the UI)
 
 - **Hotspot:** percentile rank of `changes` in the repo times percentile rank of `size`, 0 to 1. Rank-based so repo size and outliers do not distort it. Stand-in for "complicated and constantly edited" (D5).
 - **Churn:** `changes` in the window, percentile-ranked for colour.
-- **Age/staleness:** time since last change, bucketed.
+- **Age/staleness:** time since last change, measured from the analysis's `window.to` (the latest commit, so stale repos still show a spread), in buckets: at most 30 days, at most 90, at most 180, at most 365, at most 730, and "older than window" (the stalest; cold files land here). **(my call)**
 - **Bug-fix density:** commits touching the file whose subject matches `\b(fix(es|ed)?|bug|hotfix|regression|crash|defect)\b` (case-insensitive), excluding subjects matching `typo|lint|format|whitespace|docs?:`; density is bug-fixes divided by changes, shown only for files with at least 3 changes. The UI shows the repo-wide match rate so the noise is visible.
 - **Co-change:** only commits touching 30 files or fewer, only files that exist at HEAD, only files with at least 3 changes. Score is shared commits divided by commits touching either file (Jaccard); keep pairs with at least 3 shared commits and score of at least 0.3, top 5 per file.
-- **Ownership:** main author is the one with the most commits touching the file in the window. Authors are identified by lowercased email, with GitHub's `<id>+<name>@users.noreply.github.com` form reduced to `<name>@users.noreply.github.com`, but the stored key is only the first 12 hex characters of the SHA-256 of that normalised email, shown with the author's most frequent display name. This is pseudonymisation, not anonymity: names still appear, and a known email can be matched to a key. **(Markus, 2026-11-13: hash them.)** `.mailmap` is applied if the spike shows the extra fetch is cheap, otherwise it is off and the UI says aliases are not merged. Names matching `[bot]`, dependabot, renovate or github-actions are excluded. A district is flagged **single-owner** when one author holds at least 80% of file-touches in it and it has at least 5 changes.
+- **Ownership:** main author is the one with the most commits touching the file in the window. Authors are identified by lowercased email, with GitHub's `<id>+<name>@users.noreply.github.com` form reduced to `<name>@users.noreply.github.com`, but the stored key is only the first 12 hex characters of the SHA-256 of that normalised email, shown with the author's most frequent display name. This is pseudonymisation, not anonymity: names still appear, and a known email can be matched to a key. **(Markus, 2026-11-13: hash them.)** `.mailmap` is applied if the spike shows the extra fetch is cheap, otherwise it is off and the UI says aliases are not merged. Names matching `[bot]`, dependabot, renovate or github-actions are excluded. A **district** is any folder at depth 1 or 2 from the repo root (my call); a district's `changes` sums the files beneath it. A district is flagged **single-owner** when one author holds at least 80% of file-touches in it and it has at least 5 changes. The share is computed from the stored per-file author shares (at most 5 authors per file), so the rule can under-flag, never over-flag.
 - **Report card:** read-first = 0.5 rank(changes) + 0.3 rank(co-change degree) + 0.2 rank(distinct authors); riskiest = hotspot times bug-fix density (files under 3 changes excluded); forgotten = files with no commit in the window ranked by size, largest first, then files whose last in-window change is the oldest, only files above the median size. Ties are broken by size, then path.
 
 ## 9. Rendering
@@ -127,14 +129,16 @@ Pieces:
 - **Layout:** squarified treemap (d3-hierarchy) for the 2D view, area equals size. For the 3D city, districts are laid out by a treemap of file count, files are equal-footprint buildings in a grid within their district, and height is size on a square-root scale. Both views share the same `Analysis`. **(my call)**
 - **3D:** Three.js, one instanced mesh for all buildings, per-instance colour, orbit camera, hover tooltip, search, click for details. Co-change arcs drawn as curves for the selected file only. Library wrapper (plain Three.js or react-three-fiber) is the builder's call.
 - **Cap:** at most 5,000 buildings **including** the per-district "other" buildings; remaining small files in a folder merge into one "other" building for that district. **(my call)** Target 60 frames a second on a mid laptop with a 5,000 building city.
-- **Colour modes:** hotspot, churn, age, bug-fix density, language, ownership, each with a legend and a one-line "this is a heuristic" note. In age mode cold files take the stalest bucket and the legend labels it "older than window"; in the other history-based modes the legend includes the grey "no activity in window" stop. **(my call)**
-- **Details panel:** size, changes in window, last changed, bug-fix commits, main author, link to the file on GitHub.
+- **Colour modes:** hotspot, churn, age, bug-fix density, language, ownership, each with a legend and a one-line "this is a heuristic" note. Ownership mode uses distinct colours for the top 8 authors by file-touches and one neutral "others" colour (different from the "no activity" grey), and single-owner districts get a visible outline or badge in both the city and the treemap, explained in the ownership legend. **(my call)** In age mode cold files take the stalest bucket and the legend labels it "older than window"; in the other history-based modes the legend includes the grey "no activity in window" stop. **(my call)**
+- **Details panel:** size, changes in window, last changed, bug-fix commits, main author, link to the file on GitHub: `https://github.com/<owner>/<repo>/blob/<headSha>/<path>` with each path segment URL-encoded. Hovering a district shows "single owner: <name> (<share>%)" when flagged.
+- **Hostile strings (my call):** file paths, author names and every other repo-derived string render only as React text nodes or `textContent`; no `dangerouslySetInnerHTML` or `innerHTML` anywhere (enforced by ESLint), and tooltips truncate to 200 characters.
 - **Report card:** side panel with the three lists; clicking an entry flies the camera to it.
 
 ## 10. Access control
 
 - A shared demo password, checked with the same pattern as the Fourth Official: stateless HMAC-signed session cookie, `DEMO_PASSWORD` and `SESSION_SECRET` as sensitive Vercel variables, constant-time comparison, domain-separated HMACs (`the-fourth-official/lib/session.ts`). Copy the approach, not a dependency. **(my call)**
 - Gate covers only `POST /api/analyze`. The gallery, the viewer and cached results are public.
+- The `POST /api/analyze` route handler verifies the session itself as well as `proxy.ts` (defence in depth), and `DEMO_PASSWORD` must be at least 16 characters, checked at startup. **(my call)**
 - The session cookie is `HttpOnly; Secure; SameSite=Lax`, so `POST /api/analyze` cannot be driven cross-site to burn the quota. Wrong-password attempts are limited to 5 a minute per IP, kept in a `login_attempts` table in Postgres (an in-memory counter would not survive serverless instances); the client IP comes from the platform's forwarded-for header, to be confirmed against Vercel's docs when built (unverified). **(my call)**
 - A visitor who requests a repo that is not cached sees "This repo isn't analysed yet. Enter the demo password to analyse it."
 
@@ -144,7 +148,7 @@ Each cap or failure has its own message and no stack trace: not a public GitHub 
 
 ## 12. Testing, process and plan
 
-- **Tests:** unit tests for the ingestion module on fixture repos created by a script (init a repo, make scripted commits) so results are deterministic and offline; unit tests for URL validation, the bug-fix matcher, co-change and the session module; a small component test for the colour legend. No test depends on the network. The Sandbox integration is checked by the spike and one manual end-to-end run.
+- **Tests:** unit tests for the ingestion module on fixture repos created by a script (init a repo, make scripted commits) so results are deterministic and offline; unit tests for URL validation, the bug-fix matcher, co-change and the session module; a small component test for the colour legend. No test depends on the network. Database tests run on PGlite (real Postgres compiled to WASM) so the partial unique index and concurrency follow Postgres semantics; PGlite support for partial unique indexes is unverified, with a Testcontainers Postgres as the fallback. **(my call)** The Sandbox integration is checked by the spike and one manual end-to-end run.
 - **Tier:** Standard. Auth is on the global Mandatory list, but this is a single shared demo password with no accounts, no personal data and no spend beyond hosting caps. **Confirmed by Markus on 2026-11-13: Standard**, plus `/security-review` on the ingestion boundary and the gate.
 - **Stack-specific setup deferred until this is approved:** formatter hook, test framework, CI, CodeQL, quality baseline (gitleaks, device-path check), C4 diagram, Dependabot npm entry.
 - **Rough plan:** Day 0 spike (Sandbox start-up, limits, network policy, whether a function's background continuation can run 240 s, how the finished JSON is read back from the Sandbox, whether `--shallow-since` plus dropping boundary commits gives correct churn, `--use-mailmap` cost, size of a stored analysis and of the API response). Day 1 ingestion module and tests. Days 2 to 3 layout and rendering. Day 4 colour modes, details, report card, co-change arcs. Day 5 ownership, gallery build, gate, deploy, README and demo GIF. Day 6 buffer. Time slider only if Day 6 is free.
@@ -181,3 +185,10 @@ Sandbox job mechanics beyond what the spike shows; Postgres partner; Three.js wr
 23. Quota is reserved only when a new job is created (never on reuse), with the reservation date stored on the job row and released against that date.
 24. A gated analyse request for a gallery repo is a cache hit (gallery result, no quota); the gallery is refreshed only by rebuilding it.
 25. Job row carries a `reserved` flag; a refused reservation fails the new row at once; orphan release only for reserved rows; unique partial index on `(owner, name)` for non-terminal jobs makes concurrent first POSTs share one job.
+26. A district is any folder at depth 1 or 2; `Analysis.districts` carries the single-owner flag, shown as an outline or badge and a tooltip.
+27. Age buckets (30, 90, 180, 365, 730 days, older than window), measured from `window.to`; ownership palette of 8 authors plus "others".
+28. Payload limits: author names truncated to 200, over-long paths skipped as `path_too_long`, 8 MB schema and stdout bounds.
+29. Hostile-string rule: repo-derived strings only as text nodes, no `innerHTML`, tooltips cut at 200 characters.
+30. The route handler checks the session as well as the proxy; `DEMO_PASSWORD` at least 16 characters.
+31. Database tests on PGlite, Testcontainers as the fallback; the stale-job rule also runs inside `createOrReuseJob` and on every POST.
+32. The GitHub file link is `https://github.com/<owner>/<repo>/blob/<headSha>/<path>` with encoded segments.
