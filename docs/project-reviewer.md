@@ -16,7 +16,7 @@ Nothing yet. The plan: paste a public GitHub repo URL and get a 3D city plus a 2
 | Layer | Choice | Status |
 | ----- | ------ | ------ |
 | Hosting | Vercel (ADR-001) | Decided 2026-11-13 |
-| Git analysis | Plain TypeScript module, run inside a Vercel Sandbox | Planned; Sandbox spike outstanding |
+| Git analysis | Plain TypeScript module, run inside a Vercel Sandbox | Planned; Sandbox spike passed 2026-11-14 |
 | Database / cache | Postgres via a Vercel Marketplace partner (for example Neon) | Planned, not chosen |
 | Front end | Next.js with Three.js and a 2D treemap | Decided in the design (2026-11-13) |
 | Access model | Public gallery of cached cities; adding a new repo is password-protected | Decided 2026-11-13 (Markus: "make it public, while the adding of repos password protected"); tier is Standard (confirmed by Markus 2026-11-13), with a security review on the ingestion boundary and the gate |
@@ -91,10 +91,10 @@ An honest, defensible answer, in order of weight:
 2. **Cost shape.** Vercel Hobby is $0 idle with a hard cap; at 3 to 5 demos a month I'd use a small share of every allowance. Railway would use credit for an always-on web service.
 3. **Consolidation.** The Fourth Official, a Next.js app, is the only Railway service known to be live (chat-app's worker and Redis have an unknown running state; see the workspace deployed-services file), and wedding-invitation is already documented on Vercel. Moving it could end the $5 plan. Not done yet.
 4. **Learning goal.** I chose a platform I hadn't used for this workload, to broaden what I can talk about.
-5. **Trade-off I accepted.** More code (create, wait, collect, clean up) and a newer product with limits I hadn't verified, so a spike gates the dependency, with Railway as the fallback.
-6. **What would have made me pick Railway.** If chat-app or FrontRow came back (workers, Redis, Spring Boot), or if the spike failed, or if I wanted the least code to ship in a week.
+5. **Trade-off I accepted.** More code (create, wait, collect, clean up) and a newer product; a spike gated the dependency and passed (2026-11-14), with Railway as the fallback if that ever changes.
+6. **What would have made me pick Railway.** If chat-app or FrontRow came back (workers, Redis, Spring Boot), or if the spike had failed, or if I wanted the least code to ship in a week.
 
-**Interview talking point:** "Either platform could run the design, so I decided on cost shape, consolidation and what I wanted to learn, not on capability. I kept the git logic a plain module, so if the Sandbox spike failed, moving to Railway would be a small change."
+**Interview talking point:** "Either platform could run the design, so I decided on cost shape, consolidation and what I wanted to learn, not on capability. I kept the git logic a plain module, so if Sandbox ever stopped fitting (the spike passed on 2026-11-14), moving to Railway would be a small change."
 
 ---
 
@@ -128,9 +128,9 @@ An honest, defensible answer, in order of weight:
 
 **Simple version:** Hobby is a free meal with a fixed plate: when it's empty you stop eating, you don't get a bill. Pro is a tab that keeps running.
 
-**The longer version:** Vercel Hobby (verified, Vercel pricing page): $0, 100 GB bandwidth, 1M function invocations, 4 hours Active CPU, 360 GB-hours memory a month, and no way to buy more. Pro: $20 a month per seat with a $20 credit and pay-as-you-go overage, uncapped. Sandbox on Hobby reportedly gives about 5 hours of CPU a month (secondary). Our estimate for 3 to 5 demos a month at 5 uncached repos each: about 50 minutes of Sandbox time against roughly 300 (unverified). The caps allow up to 60 jobs a month at about 2 minutes each, which is 120 minutes, about 40% of the reported 300 (unverified); that is the worst case, when every job is a cache miss. Bandwidth is a few percent, and negligible function memory for the Fourth Official. These are estimates, not measurements. The real risk is bots or an exposed link, which is why live analysis could sit behind a password with a public static gallery.
+**The longer version:** Vercel Hobby (verified, Vercel pricing page): $0, 100 GB bandwidth, 1M function invocations, 4 hours Active CPU, 360 GB-hours memory a month, and no way to buy more. Pro: $20 a month per seat with a $20 credit and pay-as-you-go overage, uncapped. Sandbox on Hobby gives 5 Active CPU hours a month (Vercel docs, checked in the 2026-11 spike). Our estimate for 3 to 5 demos a month at 5 uncached repos each: about 50 minutes of Sandbox time against the 5 CPU hours (300 CPU-minutes). The caps allow up to 60 jobs a month at about 2 minutes each, which is 120 minutes of wall time. Whether that fits 5 CPU hours (300 CPU-minutes) depends on CPU time, which the spike did not measure (it timed one clone and log at about 1 s, not a full job); on 2 vCPUs the worst case is 240 CPU-minutes, on 4 vCPUs 480, so Task 9 must measure it. That is the worst case, when every job is a cache miss. Bandwidth is a few percent, and negligible function memory for the Fourth Official. These are estimates, not measurements. The real risk is bots or an exposed link, which is why live analysis could sit behind a password with a public static gallery.
 
-**Interview talking point:** "I sized the free tier before choosing it. At a few demos a month I'd use well under a fifth of the Sandbox allowance, the worst case the caps allow (60 uncached jobs, about 120 minutes) is about 40%, and the free plan's hard cap means the failure mode is a paused feature, not a surprise bill. The one thing that could change that is abuse of a public endpoint, so I'd gate the expensive path."
+**Interview talking point:** "I sized the free tier before choosing it. At a few demos a month I'd use about a sixth of the Sandbox allowance (about 50 of 300 CPU-minutes, assuming jobs run on 1 vCPU, which the spike did not record), the worst case the caps allow (60 uncached jobs, about 120 minutes of wall time) could use 40% of it or, on 4 vCPUs with busy jobs, exceed it, which I would measure before relying on it, and the free plan's hard cap means the failure mode is a paused feature, not a surprise bill. The one thing that could change that is abuse of a public endpoint, so I'd gate the expensive path."
 
 ### 5. Platform reputation and incidents
 
@@ -174,7 +174,7 @@ None yet. One early lesson: an assumption about "which projects are deployed whe
 | How did you decide how to read git history? | Concept 3 |
 | What does this cost to run, and what happens if it gets popular? | Concept 4 and concept 6 |
 | What would make you switch? | ADR-001, "What would change this decision" |
-| What's still unproven? | Sandbox spike (start-up time, limits, whether a background continuation can run 240 s, egress policy) and Hobby terms. Settled: the tier is Standard, confirmed by Markus on 2026-11-13, with a security review on the gate |
+| What's still unproven? | The 8 MB analysis size bound (re-measured in Task 9), and untested corners of the spike (Fluid compute off, the 300 s limit itself, git clone under the network policy). Settled by the 2026-11 spike: start-up 0.52 s, limits, a continuation to 270 s, egress policy, Hobby terms (personal or non-commercial). Settled: the tier is Standard, confirmed by Markus on 2026-11-13, with a security review on the gate |
 
 ## 8. Sources
 

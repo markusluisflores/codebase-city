@@ -1,7 +1,7 @@
 # ADR-001: Host Codebase City on Vercel (web app plus Sandbox for git work)
 
 **Date:** 2026-11-13
-**Status:** Accepted (one verification outstanding: the Sandbox spike, see Consequences)
+**Status:** Accepted (Sandbox spike passed 2026-11-14; the 8 MB analysis size bound is still unconfirmed, see Consequences)
 
 ## Context and Problem Statement
 
@@ -34,14 +34,14 @@ Codebase City analyses a public GitHub repo by cloning it and reading `git log`.
 * ✅ Untrusted repo content never runs on a machine that holds database credentials.
 * ✅ Possible later consolidation: `the-fourth-official` (Next.js) could move too, ending the $5 Railway plan. Not decided.
 * ⚠️ Extra code: create a Sandbox, wait, collect output, clean up. Railway B1 needs none of this.
-* ⚠️ Sandbox is a newer product. Hobby limits and start-up latency are **unverified**: reported figures are about 5 hours a month of Sandbox CPU and 45-minute timeouts, from secondary sources.
-* ⚠️ **Outstanding verification:** a short throwaway spike (clone a repo in a Sandbox, run the fast git commands, measure start-up time and consumption) must pass before the design depends on Sandbox. If it fails, revisit this ADR and fall back to Railway B1 or B2.
-* ⚠️ Vercel's terms for Hobby (any non-commercial restriction) have not been read. Vercel's pricing page did not mention one.
+* ⚠️ Sandbox is a newer product. Hobby limits and start-up latency were checked in the 2026-11 spike (`docs/spikes/2026-11-sandbox-spike.md`): 5 Active CPU hours a month, 10 concurrent sandboxes, 45-minute sessions (Vercel docs), start-up 0.52 s median.
+* ✅ **Spike passed (2026-11-14):** clone and log of express took about 1.2 s inside a Sandbox; no fallback to Railway B1 or B2 is needed. One item is unconfirmed: the 8 MB analysis size bound, re-measured in Task 9. Findings: `docs/spikes/2026-11-sandbox-spike.md`.
+* ⚠️ Vercel's terms restrict Hobby to personal or non-commercial use (read in the spike); a portfolio demo fits, revisit if it ever earns money.
 * ⚠️ Two platforms during any transition period if `the-fourth-official` stays on Railway.
 
 ## What would change this decision
 
-* The spike shows slow Sandbox start-up or limits too tight for a normal demo.
+* (Spike result 2026-11-14: start-up and limits are fine for a normal demo; this would now need a later change in Sandbox limits or pricing.)
 * Markus revives chat-app or FrontRow (long-running workers, Redis, Spring Boot): Railway then holds more of the portfolio and the consolidation argument weakens.
 * Traffic grows enough that Hobby's hard cap bites, forcing Pro at $20 a month plus per-use charges (uncapped overage).
 * A later security or terms finding on either platform.
