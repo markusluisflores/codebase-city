@@ -22,7 +22,7 @@
 
 - **Clone strategy confirmed:** the shallow clone with boundary commits dropped gives identical counts. Keep it.
 - **Mailmap on:** pass `-c mailmap.blob=<headSha>:.mailmap` with `--use-mailmap` (measured with `HEAD:`); the `--no-checkout` clone has no working-tree `.mailmap`.
-- **Job wait (a) confirmed:** continue in `after()` with `maxDuration = 300`; the callback variant is not needed.
+- **Job-wait option (a) confirmed:** continue in `after()` with `maxDuration = 300`; the callback variant is not needed.
 - **Budget (estimate, not measured):** the Hobby quota is 5 Active CPU hours (300 CPU-minutes), not about 300 wall-clock minutes. The spike timed one clone and log (about 1 s of wall time) but not CPU time or a full job, so whether 60 jobs a month fit is unconfirmed; Task 9 measures it.
 - **Deploying from the CLI** from inside `spikes/sandbox` worked with Root Directory left empty (the plan said `spikes/sandbox`; that doubles the path for CLI deploys).
 - **Cleanup:** the spike project and its Neon database can be reused for the real app in Task 12b or deleted; the preview deployments are throwaway.
