@@ -6,7 +6,7 @@ Global workflow rules live in `~/.claude/CLAUDE.md` and apply here automatically
 
 ## Status
 
-Design approved 2026-11-13 (`docs/superpowers/specs/2026-11-13-codebase-city-design.md`) and implementation plan written (`docs/superpowers/plans/2026-11-13-codebase-city.md`). Requirements are in `docs/requirements-seed.md` (decisions D1-D7 and the v1 scope are settled; do not re-open them). Task 0 (Sandbox spike) passed on 2026-11-14 (item (i), real analyses near the 10,000-file cap, was not done; Task 9 owns it) and its findings are in `docs/spikes/2026-11-sandbox-spike.md` (spike code lives on the unmerged `spike/sandbox` branch). Next: merge the findings docs PR, then Task 1 (`chore/scaffold`) and the implementation branches in the plan. No product code, scaffold or app dependencies until then.
+Design approved 2026-11-13 (`docs/superpowers/specs/2026-11-13-codebase-city-design.md`) and implementation plan written (`docs/superpowers/plans/2026-11-13-codebase-city.md`). Requirements are in `docs/requirements-seed.md` (decisions D1-D7 and the v1 scope are settled; do not re-open them). Task 0 (Sandbox spike) passed on 2026-11-14 (item (i), real analyses near the 10,000-file cap, was not done; Task 9 owns it) and its findings are in `docs/spikes/2026-11-sandbox-spike.md` (spike code lives on the unmerged `spike/sandbox` branch). Task 1 (`chore/scaffold`) set up the Next.js app and quality baseline; next are the implementation branches in the plan from `feat/ingestion`. Run `npm test`, `npm run lint`, `npm run typecheck`, `npm run build`. Commit hooks: gitleaks (needs `winget install Gitleaks.Gitleaks`), lint-staged, commitlint.
 
 ## Constraints
 

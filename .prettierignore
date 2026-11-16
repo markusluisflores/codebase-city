@@ -1,0 +1,10 @@
+.next
+node_modules
+coverage
+spikes
+package-lock.json
+docs
+.github/ISSUE_TEMPLATE
+.github/pull_request_template.md
+SECURITY.md
+next-env.d.ts
