@@ -5,7 +5,7 @@ import { safeNextPath } from '@/lib/session';
 
 const MESSAGES: Record<string, string> = {
   wrong_password: 'That password is not correct.',
-  too_many_attempts: 'Too many attempts. Wait a minute and try again.',
+  too_many_attempts: 'Too many attempts. Wait a minute without retrying, then try again.',
 };
 
 export function GateForm({ next }: { next?: string }) {

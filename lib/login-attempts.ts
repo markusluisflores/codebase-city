@@ -9,6 +9,10 @@
  *   recorded for `ip` in the 60 seconds before `now`: the 6th attempt in a minute is refused. The insert
  *   must be committed before the count is read (read committed is enough), so at most 5 concurrent
  *   requests can see a count of 5 or fewer.
+ * - Do NOT merge the insert and the count into one SQL statement (a CTE shares one snapshot, so the count
+ *   misses concurrent inserts and reopens the race). Use two statements, or one counter row updated with
+ *   `ON CONFLICT DO UPDATE SET count = count + 1 RETURNING count` (the row lock serialises requests).
+ * - Count rows with `ts > now - 60s` and no upper bound (instance clocks differ), or use the database clock.
  * - Both functions receive the raw IP; hashing happens inside the store. A throw means deny.
  */
 export interface LoginAttemptStore {
