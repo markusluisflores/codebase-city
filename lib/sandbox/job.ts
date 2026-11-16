@@ -19,6 +19,8 @@ import {
   validateWindowFrom,
 } from '../repo/validate';
 
+const MAX_MAILMAP_BYTES = 1024 * 1024;
+
 export type JobErrorCode =
   | 'bad_argument'
   | 'too_many_files'
@@ -47,6 +49,8 @@ export interface JobDeps {
   extraGitConfig?: string[];
   caps?: { maxCommitsInWindow: number; maxFiles: number };
   write?: (line: string) => void;
+  /** Replaces `analyze` (tests only, to force an oversize result). */
+  analyzeFn?: typeof analyze;
 }
 
 /** Disable hooks, fsmonitor, askpass, credential helpers and every transport except https. */
@@ -114,7 +118,7 @@ const defaultExec: Exec = (args, opts = {}) =>
     cwd: opts.cwd,
     env: gitEnv(opts.env),
     encoding: 'utf8',
-    maxBuffer: 512 * 1024 * 1024,
+    maxBuffer: 256 * 1024 * 1024,
     // stderr is captured and dropped: it can echo repo content or tokens.
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -208,10 +212,13 @@ export async function runJob(argv: string[], deps: JobDeps = {}): Promise<number
     if (!Number.isInteger(count)) throw new JobError('clone_failed');
     if (count > caps.maxCommitsInWindow) throw new JobError('too_many_commits_in_window');
 
+    // A hostile repo could ship a huge .mailmap; only use one up to 1 MiB.
     let mailmapApplied = false;
+    let useMailmap = true; // silent when the file is absent
     try {
-      inRepo(['cat-file', '-e', `${headSha}:.mailmap`]);
-      mailmapApplied = true;
+      const size = Number(inRepo(['cat-file', '-s', `${headSha}:.mailmap`]).trim());
+      mailmapApplied = Number.isInteger(size) && size <= MAX_MAILMAP_BYTES;
+      useMailmap = mailmapApplied;
     } catch {
       // No .mailmap at that commit.
     }
@@ -220,11 +227,10 @@ export async function runJob(argv: string[], deps: JobDeps = {}): Promise<number
     let rawLog: string;
     try {
       rawLog = inRepo([
-        '-c',
-        `mailmap.blob=${headSha}:.mailmap`,
+        ...(useMailmap ? ['-c', `mailmap.blob=${headSha}:.mailmap`] : []),
         sub!,
         ...rest,
-        '--use-mailmap',
+        ...(useMailmap ? ['--use-mailmap'] : []),
         since,
         headSha,
         '--',
@@ -244,7 +250,7 @@ export async function runJob(argv: string[], deps: JobDeps = {}): Promise<number
     );
 
     emit({ phase: 'computing' });
-    const analysis = analyze({
+    const analysis = (deps.analyzeFn ?? analyze)({
       repo: { owner, name, headSha, defaultBranch },
       rawLog,
       head,

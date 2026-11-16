@@ -254,6 +254,49 @@ describe('job against a local fixture repo', () => {
   });
 });
 
+describe('job mailmap size guard', () => {
+  it('skips a .mailmap larger than 1 MiB instead of fetching it into the log call', async () => {
+    const f = await fixture([commit(1, { 'a.ts': '1', '.mailmap': 'x'.repeat(1024 * 1024 + 1) })]);
+    const sizes = await sizesFile([{ path: 'a.ts', size: 1 }]);
+    const r = await run(good(f.sha, sizes), f.url);
+    expect(r.code).toBe(0);
+    expect(r.calls.some((c) => c.includes('--use-mailmap'))).toBe(false);
+    expect(parseAnalysis(JSON.parse(r.lines.at(-1)!)).stats.mailmapApplied).toBe(false);
+  });
+});
+
+describe('job output size guard', () => {
+  it('fails invalid_output instead of printing a line over MAX_ANALYSIS_BYTES', async () => {
+    const f = await fixture([commit(1, { 'a.ts': '1' })]);
+    const sizes = await sizesFile([{ path: 'a.ts', size: 1 }]);
+    const { analyze } = await import('@/lib/ingest/analyze');
+    const { MAX_ANALYSIS_BYTES } = await import('@/lib/caps');
+    const oversize: typeof analyze = (input) => {
+      const a = analyze(input);
+      const line = Buffer.byteLength(JSON.stringify(a)) + 1;
+      // Pad a display name so the printed line is exactly one byte over the bound.
+      a.files[0]!.mainAuthor = 'x'.repeat(
+        MAX_ANALYSIS_BYTES - line + 1 + (a.files[0]!.mainAuthor?.length ?? 0),
+      );
+      return a;
+    };
+    const over = await run(good(f.sha, sizes), f.url, { analyzeFn: oversize });
+    expect(over.code).toBe(1);
+    expect(over.lines.at(-1)).toBe('{"error":"invalid_output"}');
+    const exact: typeof analyze = (input) => {
+      const a = analyze(input);
+      const line = Buffer.byteLength(JSON.stringify(a)) + 1;
+      a.files[0]!.mainAuthor = 'x'.repeat(
+        MAX_ANALYSIS_BYTES - line + (a.files[0]!.mainAuthor?.length ?? 0),
+      );
+      return a;
+    };
+    const ok = await run(good(f.sha, sizes), f.url, { analyzeFn: exact });
+    expect(ok.code).toBe(0);
+    expect(Buffer.byteLength(ok.lines.at(-1)! + '\n')).toBe(MAX_ANALYSIS_BYTES);
+  });
+});
+
 describe('job argument validation', () => {
   const SHA = 'a'.repeat(40);
   async function bad(argv: string[]) {
@@ -325,7 +368,7 @@ describe('job bundle', () => {
       entryPoints: ['lib/sandbox/job.ts'],
       bundle: true,
       platform: 'node',
-      target: 'node20',
+      target: 'node24',
       format: 'esm',
       outfile: out,
       logLevel: 'silent',

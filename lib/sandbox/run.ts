@@ -69,6 +69,20 @@ export interface RunnerDeps {
   readBundle?: () => Promise<Buffer>;
 }
 
+const STOP_BOUND_MS = 5_000;
+
+/** Stops the Sandbox but never waits on a hung stop call for more than a few seconds. */
+async function stopBounded(sandbox: SandboxLike): Promise<void> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    sandbox.stop().catch(() => undefined),
+    new Promise<void>((resolve) => {
+      t = setTimeout(resolve, STOP_BOUND_MS);
+    }),
+  ]);
+  clearTimeout(t);
+}
+
 /** The only host the Sandbox may reach. */
 export const EGRESS_ALLOW = ['github.com'];
 const DIR = '/vercel/sandbox';
@@ -180,6 +194,7 @@ export async function runAnalysisInSandbox(
 
   const work = (async (): Promise<Outcome> => {
     const bundle = await readBundle();
+    if (aborted) throw new SandboxError('timeout'); // never start creating after the deadline
     sandbox = await create({
       timeout: input.deadlineMs,
       networkPolicy: { allow: EGRESS_ALLOW },
@@ -188,7 +203,7 @@ export async function runAnalysisInSandbox(
     });
     if (aborted) {
       // The deadline (or an error) won while the Sandbox was being created.
-      await sandbox.stop().catch(() => undefined);
+      await stopBounded(sandbox);
       throw new SandboxError('timeout');
     }
     await sandbox.writeFiles([
@@ -240,6 +255,6 @@ export async function runAnalysisInSandbox(
   } finally {
     clearTimeout(timer);
     aborted = true;
-    if (sandbox) await sandbox.stop().catch(() => undefined);
+    if (sandbox) await stopBounded(sandbox);
   }
 }

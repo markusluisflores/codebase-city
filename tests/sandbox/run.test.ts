@@ -149,13 +149,29 @@ describe('runAnalysisInSandbox', () => {
     expect(m.stop).toHaveBeenCalledTimes(1);
   });
 
-  it('accepts output right at the headroom boundary but counts stderr as nothing', async () => {
+  it('ignores stderr: it is never read and never counts towards the stdout cap', async () => {
     const input = base();
     const m = mock(async function* () {
       yield { stream: 'stderr' as const, data: 'y'.repeat(CAPS.maxStdoutBytes + 10) };
       yield { stream: 'stdout' as const, data: JSON.stringify(analysisFor(input)) + '\n' };
     });
     await expect(runAnalysisInSandbox(input, deps(m))).resolves.toBeDefined();
+  });
+
+  it('accepts stdout of exactly the cap and rejects one byte more', async () => {
+    const input = base();
+    const line = JSON.stringify(analysisFor(input)) + '\n';
+    const pad = (n: number) => '\n'.repeat(n); // empty lines are skipped but counted
+    const exact = line + pad(CAPS.maxStdoutBytes - Buffer.byteLength(line));
+    expect(Buffer.byteLength(exact)).toBe(CAPS.maxStdoutBytes);
+    await expect(
+      runAnalysisInSandbox(input, deps(mock(() => lines(exact)))),
+    ).resolves.toBeDefined();
+    await expect(
+      runAnalysisInSandbox(input, deps(mock(() => lines(exact + '\n')))),
+    ).rejects.toMatchObject({
+      code: 'invalid_output',
+    });
   });
 
   it('raises timeout at the deadline and destroys the Sandbox', async () => {
