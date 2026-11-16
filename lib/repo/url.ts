@@ -11,6 +11,11 @@ const BARE_FORM = /^([^/\s?#]+)\/([^/\s?#]+?)(?:\.git)?\/?$/;
 // than `validateOwnerName` for the owner (this also keeps `github.com/o` from parsing as owner "github.com").
 const GITHUB_OWNER = /^[A-Za-z0-9-]{1,39}$/;
 
+/** True for a GitHub user or organisation name (stricter than `validateOwnerName`). */
+export function isGitHubOwner(s: string): boolean {
+  return GITHUB_OWNER.test(s) && validateOwnerName(s);
+}
+
 /**
  * Turns pasted text into a validated `{owner, name}` for a public github.com repository, or
  * `null`. Accepts `owner/repo` and github.com URLs (http or https, optional `www.`, `.git`,
@@ -29,7 +34,7 @@ export function parseRepoInput(input: string): { owner: string; name: string } |
   const m = URL_FORM.exec(text) ?? BARE_FORM.exec(text);
   if (!m) return null;
   const [, owner, name] = m as unknown as [string, string, string];
-  if (!GITHUB_OWNER.test(owner) || !validateOwnerName(owner) || !validateOwnerName(name)) {
+  if (!isGitHubOwner(owner) || !validateOwnerName(name)) {
     return null;
   }
   // `owner/r.git` strips one `.git`; a remaining name that still ends in `.git` is unusual but valid.

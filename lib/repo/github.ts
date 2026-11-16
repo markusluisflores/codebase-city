@@ -1,5 +1,6 @@
 import { windowStart } from '../ingest/analyze';
 import { CAPS } from '../caps';
+import { isGitHubOwner } from './url';
 import {
   validateBranchName,
   validateHeadSha,
@@ -166,7 +167,7 @@ export async function fetchRepoFacts(
   name: string,
   deps: GitHubDeps = {},
 ): Promise<RepoFacts> {
-  if (!validateOwnerName(owner) || !validateOwnerName(name)) throw new GitHubError('not_found');
+  if (!isGitHubOwner(owner) || !validateOwnerName(name)) throw new GitHubError('not_found');
   const http = {
     fetch: deps.fetch ?? fetch,
     token: deps.token ?? process.env.GITHUB_TOKEN ?? undefined,
@@ -182,7 +183,7 @@ export async function fetchRepoFacts(
     extra.length > 0 ||
     canonOwner === undefined ||
     canonName === undefined ||
-    !validateOwnerName(canonOwner) ||
+    !isGitHubOwner(canonOwner) ||
     !validateOwnerName(canonName)
   ) {
     throw new GitHubError('bad_response');

@@ -51,7 +51,12 @@ export function runBuiltJob(
     );
     // Collect bytes and decode once: a multi-byte character can straddle two stdout chunks.
     const chunks: Buffer[] = [];
-    child.stdout.on('data', (d: Buffer) => chunks.push(d));
+    let bytes = 0;
+    child.stdout.on('data', (d: Buffer) => {
+      bytes += d.length;
+      if (bytes > CAPS.maxStdoutBytes) child.kill('SIGKILL');
+      else chunks.push(d);
+    });
     const timer = setTimeout(
       () => child.kill('SIGKILL'),
       opts.timeoutMs ?? CAPS.analysisDeadlineMs,
