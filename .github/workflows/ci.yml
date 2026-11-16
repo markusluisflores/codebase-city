@@ -25,7 +25,7 @@ jobs:
       - name: Set up Node.js with npm cache
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          node-version: 22
           cache: npm
       - name: Install dependencies from the lockfile
         run: npm ci
