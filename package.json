@@ -11,7 +11,8 @@
     "test": "vitest run",
     "format": "prettier --write .",
     "prepare": "husky",
-    "build:sandbox": "esbuild lib/sandbox/job.ts --bundle --platform=node --target=node24 --format=esm --outfile=dist/sandbox-job.mjs"
+    "build:sandbox": "esbuild lib/sandbox/job.ts --bundle --platform=node --target=node24 --format=esm --outfile=dist/sandbox-job.mjs",
+    "build:gallery": "npm run build:sandbox && esbuild scripts/build-gallery.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/build-gallery.mjs && node dist/build-gallery.mjs"
   },
   "dependencies": {
     "@vercel/sandbox": "3.9.1",
