@@ -30,6 +30,7 @@ function isolatedEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
     // git for Windows maps /dev/null itself; it rejects os.devNull on Windows.
     GIT_CONFIG_GLOBAL: '/dev/null',
     GIT_TERMINAL_PROMPT: '0',
+    LC_ALL: 'C', // untranslated git messages (empty-repo detection) and stable output
     ...extra,
   };
 }
@@ -62,39 +63,44 @@ export async function makeRepo(
   const emptyHooks = join(dir, '.git-empty-hooks');
   mkdirSync(emptyHooks);
 
-  git(dir, ['init', '--quiet', '--initial-branch=main']);
-  git(dir, ['config', 'core.autocrlf', 'false']);
-  git(dir, ['config', 'core.hooksPath', emptyHooks]);
-  git(dir, ['config', 'commit.gpgsign', 'false']);
-  // Windows git otherwise refuses index paths with a quote, tab or newline.
-  git(dir, ['config', 'core.protectNTFS', 'false']);
+  try {
+    git(dir, ['init', '--quiet', '--initial-branch=main']);
+    git(dir, ['config', 'core.autocrlf', 'false']);
+    git(dir, ['config', 'core.hooksPath', emptyHooks]);
+    git(dir, ['config', 'commit.gpgsign', 'false']);
+    // Windows git otherwise refuses index paths with a quote, tab or newline.
+    git(dir, ['config', 'core.protectNTFS', 'false']);
 
-  let parent: string | null = null as string | null;
-  for (const commit of commits) {
-    for (const [path, content] of Object.entries(commit.files)) {
-      const blob = git(dir, ['hash-object', '-w', '--stdin'], { input: content }).trim();
-      git(dir, ['update-index', '--add', '--cacheinfo', `100644,${blob},${path}`]);
+    let parent: string | null = null as string | null;
+    for (const commit of commits) {
+      for (const [path, content] of Object.entries(commit.files)) {
+        const blob = git(dir, ['hash-object', '-w', '--stdin'], { input: content }).trim();
+        git(dir, ['update-index', '--add', '--cacheinfo', `100644,${blob},${path}`]);
+      }
+      const tree = git(dir, ['write-tree']).trim();
+      const date = `${commit.time} +0000`;
+      const args: string[] = [
+        'commit-tree',
+        tree,
+        ...(parent ? ['-p', parent] : []),
+        '-m',
+        commit.subject,
+      ];
+      parent = git(dir, args, {
+        env: {
+          GIT_AUTHOR_NAME: commit.author,
+          GIT_AUTHOR_EMAIL: commit.email,
+          GIT_AUTHOR_DATE: date,
+          GIT_COMMITTER_NAME: commit.author,
+          GIT_COMMITTER_EMAIL: commit.email,
+          GIT_COMMITTER_DATE: date,
+        },
+      }).trim();
+      git(dir, ['update-ref', 'refs/heads/main', parent]);
     }
-    const tree = git(dir, ['write-tree']).trim();
-    const date = `${commit.time} +0000`;
-    const args: string[] = [
-      'commit-tree',
-      tree,
-      ...(parent ? ['-p', parent] : []),
-      '-m',
-      commit.subject,
-    ];
-    parent = git(dir, args, {
-      env: {
-        GIT_AUTHOR_NAME: commit.author,
-        GIT_AUTHOR_EMAIL: commit.email,
-        GIT_AUTHOR_DATE: date,
-        GIT_COMMITTER_NAME: commit.author,
-        GIT_COMMITTER_EMAIL: commit.email,
-        GIT_COMMITTER_DATE: date,
-      },
-    }).trim();
-    git(dir, ['update-ref', 'refs/heads/main', parent]);
+  } catch (e) {
+    await rm(dir, { recursive: true, force: true });
+    throw e;
   }
 
   return { dir, cleanup: () => rm(dir, { recursive: true, force: true }) };
@@ -105,7 +111,8 @@ export async function makeRepo(
  * path survives. Each record starts with U+001E (RS); its header fields
  * (hash, author name, author email, unix time, subject) are separated by
  * U+001F and end with a NUL; a single newline follows, then the changed paths,
- * each NUL-terminated.
+ * each NUL-terminated. The spec's `-c mailmap.blob=... --use-mailmap` flags are
+ * deliberately omitted here; the sandbox job (Task 9) owns mailmap coverage.
  */
 export function gitLogRaw(dir: string, sinceUnix?: number): string {
   const args = [
