@@ -24,7 +24,7 @@ export function windowStart(latestCommitUnix: number): number {
   const d = new Date(latestCommitUnix * 1000);
   const total = d.getUTCFullYear() * 12 + d.getUTCMonth() - WINDOW_MONTHS;
   const year = Math.floor(total / 12);
-  const month = total % 12;
+  const month = ((total % 12) + 12) % 12;
   const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const day = Math.min(d.getUTCDate(), lastDay);
   const out = new Date(d.getTime());
@@ -114,6 +114,8 @@ function serialisedBytes(a: Analysis): number {
  * schema reject the result, shed the least valuable detail in fixed steps (co-change
  * partners first, then authors beyond the main one) and record `size_trimmed`. The report
  * card and districts were already computed from the full data; the trim is deterministic.
+ * Best effort: if paths alone exceed the bound the result is returned still over it and the
+ * schema (`parseAnalysis`) is the backstop. `maxFiles` is likewise the caller's check (`checkCaps`).
  */
 function fitToSizeBound(analysis: Analysis): Analysis {
   if (serialisedBytes(analysis) <= CAPS.maxStdoutBytes) return analysis;

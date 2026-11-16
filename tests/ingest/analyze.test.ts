@@ -308,6 +308,17 @@ describe('caps', () => {
 });
 
 describe('serialised size', () => {
+  it('is best effort: paths alone over the bound stay over it, flagged, for parseAnalysis to reject', () => {
+    const head = Array.from({ length: 10_000 }, (_, i) => ({
+      path: `${String(i).padStart(5, '0')}${'p'.repeat(1000)}`,
+      size: 1,
+    }));
+    const result = analyze({ repo: REPO, rawLog: '', head, windowFromUnix: 0 });
+    expect(Buffer.byteLength(JSON.stringify(result), 'utf8')).toBeGreaterThan(CAPS.maxStdoutBytes);
+    expect(result.stats.capsHit).toContain('size_trimmed');
+    expect(() => parseAnalysis(JSON.parse(JSON.stringify(result)))).toThrow();
+  });
+
   it('stays valid for a 10,000-file repo whose files each carry 5 authors and 5 co-change partners', () => {
     const head: { path: string; size: number }[] = [];
     const log: string[] = [];
