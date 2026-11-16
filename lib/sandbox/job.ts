@@ -212,16 +212,11 @@ export async function runJob(argv: string[], deps: JobDeps = {}): Promise<number
     if (!Number.isInteger(count)) throw new JobError('clone_failed');
     if (count > caps.maxCommitsInWindow) throw new JobError('too_many_commits_in_window');
 
-    // A hostile repo could ship a huge .mailmap; only use one up to 1 MiB.
-    let mailmapApplied = false;
-    let useMailmap = true; // silent when the file is absent
-    try {
-      const size = Number(inRepo(['cat-file', '-s', `${headSha}:.mailmap`]).trim());
-      mailmapApplied = Number.isInteger(size) && size <= MAX_MAILMAP_BYTES;
-      useMailmap = mailmapApplied;
-    } catch {
-      // No .mailmap at that commit.
-    }
+    // The size comes from the server-side tree listing, so a hostile repo's huge .mailmap is
+    // never fetched just to measure it. Absent from the listing: flags stay on, git is silent.
+    const mailmap = head.find((f) => f.path === '.mailmap');
+    const useMailmap = mailmap === undefined || mailmap.size <= MAX_MAILMAP_BYTES;
+    const mailmapApplied = mailmap !== undefined && useMailmap;
 
     const [sub, ...rest] = GIT_LOG_ARGS as string[];
     let rawLog: string;

@@ -198,7 +198,11 @@ describe('job against a local fixture repo', () => {
         'old@x.test',
       ),
     ]);
-    const r2 = await run(good(mapped.sha, sizes), mapped.url);
+    const mappedSizes = await sizesFile([
+      { path: 'a.ts', size: 1 },
+      { path: '.mailmap', size: 40 },
+    ]);
+    const r2 = await run(good(mapped.sha, mappedSizes), mapped.url);
     const a2 = parseAnalysis(JSON.parse(r2.lines.at(-1)!));
     expect(a2.stats.mailmapApplied).toBe(true);
     expect(a2.files.find((x) => x.path === 'a.ts')?.mainAuthor).toBe('New Name');
@@ -255,11 +259,15 @@ describe('job against a local fixture repo', () => {
 });
 
 describe('job mailmap size guard', () => {
-  it('skips a .mailmap larger than 1 MiB instead of fetching it into the log call', async () => {
+  it('skips a .mailmap larger than 1 MiB (size from the tree listing) without fetching it', async () => {
     const f = await fixture([commit(1, { 'a.ts': '1', '.mailmap': 'x'.repeat(1024 * 1024 + 1) })]);
-    const sizes = await sizesFile([{ path: 'a.ts', size: 1 }]);
+    const sizes = await sizesFile([
+      { path: 'a.ts', size: 1 },
+      { path: '.mailmap', size: 1024 * 1024 + 1 },
+    ]);
     const r = await run(good(f.sha, sizes), f.url);
     expect(r.code).toBe(0);
+    expect(r.calls.some((c) => c.some((a) => a.includes('.mailmap')))).toBe(false);
     expect(r.calls.some((c) => c.includes('--use-mailmap'))).toBe(false);
     expect(parseAnalysis(JSON.parse(r.lines.at(-1)!)).stats.mailmapApplied).toBe(false);
   });
