@@ -54,8 +54,14 @@ function toJob(r: JobRow): Job {
  * reservation date, all in ONE statement. The row lock plus the non-terminal check mean exactly one
  * caller can win, so the unit is released exactly once however many callers race (the sweep, a
  * status read, the route's own failure path). A job already `done` or `failed` is left alone.
+ * `releaseIfUnreserved` is for the one caller that cannot tell whether its `reserved = true` update
+ * committed: the row lock then decides, and the unit goes back once either way.
  */
-async function failJob(id: string, errorCode: string): Promise<boolean> {
+async function failJob(
+  id: string,
+  errorCode: string,
+  releaseIfUnreserved = false,
+): Promise<boolean> {
   const rows = await getDb().query(
     `WITH old AS (
        SELECT id, reserved, reserved_on FROM jobs
@@ -70,11 +76,11 @@ async function failJob(id: string, errorCode: string): Promise<boolean> {
      rel AS (
        UPDATE usage_counters c SET count = GREATEST(c.count - 1, 0)
          FROM upd
-        WHERE upd.was_reserved AND c.period IN ('d:' || upd.day, 'm:' || substr(upd.day, 1, 7))
+        WHERE (upd.was_reserved OR $3::boolean) AND c.period IN ('d:' || upd.day, 'm:' || substr(upd.day, 1, 7))
        RETURNING 1
      )
      SELECT id FROM upd`,
-    [id, errorCode],
+    [id, errorCode, releaseIfUnreserved],
   );
   return rows.length > 0;
 }
@@ -150,8 +156,9 @@ export async function createOrReuseJob(
       );
     } catch (err) {
       // Do not leave a queued row that blocks the repo, and do not leak the unit just taken.
-      await releaseQuota(utcDay(now)).catch(() => undefined);
-      await failJob(id, 'db_write_failed').catch(() => undefined);
+      // A throw does not prove the update did not commit (a lost response), so the one failing
+      // statement decides: it releases the unit whether or not the mark landed, exactly once.
+      await failJob(id, 'db_write_failed', true).catch(() => undefined);
       throw err;
     }
     // The row was failed in between (for example swept): hand the unit back, nothing holds it.

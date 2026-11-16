@@ -289,3 +289,24 @@ describe('createOrReuseJob failure paths', () => {
     expect(next.reused).toBe(false);
   });
 });
+
+describe('lost response on the reserved mark', () => {
+  it('releases exactly one unit when the mark committed but its response was lost', async () => {
+    await createOrReuseJob('octo', 'one', NOON);
+    await createOrReuseJob('octo', 'two', NOON);
+    setDb({
+      query: async (text, params) => {
+        const rows = await pgAdapter(t.pg).query<never>(text, params);
+        if (text.startsWith('UPDATE jobs SET reserved = true')) throw new Error('response lost');
+        return rows;
+      },
+    });
+    try {
+      await expect(createOrReuseJob('octo', 'three', NOON)).rejects.toThrow('response lost');
+    } finally {
+      setDb(pgAdapter(t.pg));
+    }
+    // the two live jobs still hold their units; the third gave back its own, once
+    expect(await counters()).toEqual({ 'd:2026-11-16': 2, 'm:2026-11': 2 });
+  });
+});
