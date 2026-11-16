@@ -112,12 +112,9 @@ export function buildReport(files: FileStat[]): Report {
 
   const hot = hotspotScore(kept);
   const riskiest = top(
-    kept.filter((f) => f.changes >= MIN_CHANGES_FOR_RISK),
+    kept.filter((f) => f.changes >= MIN_CHANGES_FOR_RISK && f.bugFixes > 0),
     (f) => (hot.get(f.path) ?? 0) * (f.bugFixes / f.changes),
-  ).filter((p) => {
-    const f = kept.find((x) => x.path === p);
-    return f !== undefined && f.bugFixes > 0 && (hot.get(p) ?? 0) > 0;
-  });
+  );
 
   const med = median(kept.map((f) => f.size).sort((a, b) => a - b));
   const large = kept.filter((f) => f.size > med);
