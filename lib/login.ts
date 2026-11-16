@@ -19,7 +19,7 @@ export interface LoginDeps {
 
 /**
  * Password check behind POST /api/session. Order matters: configuration, body shape, the per-IP limit
- * (checked before the password is compared, so a locked-out guesser learns nothing), then the compare.
+ * (recorded and checked before the password is compared, so a locked-out guesser learns nothing), then the compare.
  * Logs nothing; responses carry fixed error codes only.
  */
 export async function handleLogin(req: Request, deps: LoginDeps): Promise<Response> {
@@ -58,11 +58,14 @@ export async function handleLogin(req: Request, deps: LoginDeps): Promise<Respon
 
   const ip = clientIp(req.headers);
   try {
+    // Count this attempt BEFORE comparing, then check the total (which includes this attempt). Under
+    // concurrency at most 5 requests can see a total of 5 or fewer, so a parallel burst cannot out-guess
+    // the limit, and a store whose write fails denies before any comparison happens.
+    await deps.store.recordFailedLogin(ip, now());
     if (await deps.store.tooManyAttempts(ip, now())) {
       return jsonError('too_many_attempts', 429, { 'retry-after': '60' });
     }
     if (!(await passwordMatches(config.secret, password, config.demoPassword))) {
-      await deps.store.recordFailedLogin(ip, now());
       return jsonError('wrong_password', 401);
     }
   } catch {

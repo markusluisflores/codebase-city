@@ -1,6 +1,6 @@
 import type { LoginAttemptStore } from '@/lib/login-attempts';
 
-/** In-memory stand-in for the Task 12a store (same semantics: 5 failures in the last minute block). */
+/** In-memory stand-in for the Task 12a store (same semantics: more than 5 recorded attempts in the last minute block). */
 export function fakeLoginAttempts(): LoginAttemptStore & { failures: Map<string, Date[]> } {
   const failures = new Map<string, Date[]>();
   return {
@@ -10,7 +10,7 @@ export function fakeLoginAttempts(): LoginAttemptStore & { failures: Map<string,
     },
     async tooManyAttempts(ip, now) {
       const recent = (failures.get(ip) ?? []).filter((t) => now.getTime() - t.getTime() < 60_000);
-      return recent.length >= 5;
+      return recent.length > 5;
     },
   };
 }

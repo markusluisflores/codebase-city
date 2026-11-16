@@ -116,8 +116,8 @@ describe('login handler', () => {
     expect(blocked.headers.get('retry-after')).toBe('60');
     expect(blocked.headers.get('set-cookie')).toBeNull();
     expect(await blocked.json()).toEqual({ error: 'too_many_attempts' });
-    // Blocked attempts are not recorded again, so the window ends 60 s after the 5th failure.
-    expect(store.failures.get('203.0.113.9')).toHaveLength(5);
+    // Every attempt is recorded before the compare, the blocked one included.
+    expect(store.failures.get('203.0.113.9')).toHaveLength(6);
     const later = new Date(t0.getTime() + 61_000);
     expect(
       (await handleLogin(loginReq({ password: PASSWORD }), { store, env, now: () => later }))
@@ -142,6 +142,41 @@ describe('login handler', () => {
     }
     const spoofed = loginReq({ password: PASSWORD }, { 'x-forwarded-for': '10.9.9.9' });
     expect((await handleLogin(spoofed, { store, env })).status).toBe(429);
+  });
+
+  it('a parallel burst cannot out-guess the limit: at most 5 comparisons happen', async () => {
+    const inner = fakeLoginAttempts();
+    const slow = {
+      recordFailedLogin: async (ip: string, now: Date) => {
+        await inner.recordFailedLogin(ip, now);
+        await new Promise((r) => setTimeout(r, 5));
+      },
+      tooManyAttempts: async (ip: string, now: Date) => {
+        await new Promise((r) => setTimeout(r, 5));
+        return inner.tooManyAttempts(ip, now);
+      },
+    };
+    const results = await Promise.all(
+      Array.from({ length: 100 }, (_, i) =>
+        handleLogin(loginReq({ password: `guess-${i}` }), { store: slow, env }),
+      ),
+    );
+    expect(results.filter((r) => r.status === 401).length).toBeLessThanOrEqual(5);
+    expect(results.filter((r) => r.status === 429).length).toBeGreaterThanOrEqual(95);
+  });
+
+  it('denies, without ever comparing, when only the write fails (no 503-versus-204 oracle)', async () => {
+    const readOnly = {
+      recordFailedLogin: async () => {
+        throw new Error('write denied');
+      },
+      tooManyAttempts: async () => false,
+    };
+    for (const pw of ['wrong-guess', PASSWORD]) {
+      const res = await handleLogin(loginReq({ password: pw }), { store: readOnly, env });
+      expect(res.status).toBe(503);
+      expect(res.headers.get('set-cookie')).toBeNull();
+    }
   });
 
   it('fails closed (503, no cookie) when the attempt store is unavailable', async () => {
@@ -264,6 +299,9 @@ describe('proxy.ts gate', () => {
     '/api/analyze;x=1',
     '/api/analyze%00',
     '/api/%E0%A4%A',
+    '/x/../api/analyze',
+    '/api/analyze.',
+    '/api/analyze%20',
   ])('gates the path trick %s', async (path) => {
     const res = await proxy(req(path));
     expect(res.status).toBe(401);
@@ -275,6 +313,10 @@ describe('proxy.ts gate', () => {
       expect((await proxy(req('/api/analyze', method))).status).toBe(401);
     },
   );
+
+  it('runs only for /api paths, so viewer and gallery pages never reach the proxy', () => {
+    for (const m of proxyConfig.matcher) expect(m.startsWith('/api/')).toBe(true);
+  });
 
   it('keeps the login, job status and every public viewer path open', async () => {
     for (const [path, method] of [

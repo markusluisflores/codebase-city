@@ -152,5 +152,24 @@ export function safeNextPath(next: string | null | undefined): string {
 export function clientIp(headers: Headers): string {
   const raw = headers.get('x-vercel-forwarded-for') ?? headers.get('x-real-ip');
   const first = raw?.split(',')[0]?.trim();
-  return first ? first.slice(0, 64) : 'unknown';
+  return first ? ipBucket(first.slice(0, 64)) : 'unknown';
+}
+
+// An IPv6 visitor normally controls a whole /64, so key on that prefix; otherwise rotating the low bits
+// gives every guess a fresh bucket. IPv4 and anything unparseable is used as given.
+function ipBucket(ip: string): string {
+  const addr = ip.split('%')[0] ?? ip;
+  if (!addr.includes(':') || addr.includes('.')) return ip;
+  const [head, tail, extra] = addr.split('::');
+  if (extra !== undefined) return ip;
+  const left = head ? head.split(':') : [];
+  const right = tail ? tail.split(':') : [];
+  const fill = tail === undefined ? 0 : 8 - left.length - right.length;
+  const groups =
+    tail === undefined ? left : [...left, ...Array<string>(Math.max(fill, 0)).fill('0'), ...right];
+  if (groups.length !== 8 || !groups.every((g) => /^[0-9a-f]{1,4}$/i.test(g))) return ip;
+  return `${groups
+    .slice(0, 4)
+    .map((g) => parseInt(g, 16).toString(16))
+    .join(':')}::/64`;
 }

@@ -176,4 +176,20 @@ describe('clientIp', () => {
   it('bounds the length of the value', () => {
     expect(clientIp(h({ 'x-real-ip': 'a'.repeat(500) })).length).toBeLessThanOrEqual(64);
   });
+
+  it('keys IPv6 on the /64 prefix so rotating low bits does not give a fresh bucket', () => {
+    const a = clientIp(h({ 'x-vercel-forwarded-for': '2001:db8:1:2::1' }));
+    const b = clientIp(h({ 'x-vercel-forwarded-for': '2001:DB8:1:2:ffff:ffff:ffff:ffff' }));
+    const c = clientIp(h({ 'x-vercel-forwarded-for': '2001:db8:1:3::1' }));
+    expect(a).toBe(b);
+    expect(a).not.toBe(c);
+    expect(clientIp(h({ 'x-vercel-forwarded-for': '::1' }))).toBe('0:0:0:0::/64');
+  });
+  it('leaves IPv4, mapped IPv4 and unparseable values as given', () => {
+    expect(clientIp(h({ 'x-vercel-forwarded-for': '203.0.113.9' }))).toBe('203.0.113.9');
+    expect(clientIp(h({ 'x-vercel-forwarded-for': '::ffff:203.0.113.9' }))).toBe(
+      '::ffff:203.0.113.9',
+    );
+    expect(clientIp(h({ 'x-vercel-forwarded-for': 'zz:yy' }))).toBe('zz:yy');
+  });
 });
