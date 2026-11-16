@@ -8,14 +8,19 @@ const SCHEMA = readFileSync(new URL('../../db/schema.sql', import.meta.url), 'ut
  * Real Postgres (PGlite, compiled to WASM) with `db/schema.sql` applied, installed as the app's
  * connection. No network. `reset()` empties every table between tests.
  */
-export async function useTestDb(): Promise<{ pg: PGlite; reset: () => Promise<void> }> {
-  const pg = new PGlite();
-  await pg.exec(SCHEMA);
-  const db: Db = {
+/** A `Db` over a PGlite instance (tests wrap it to inject failures). */
+export function pgAdapter(pg: PGlite): Db {
+  return {
     async query<T>(text: string, params: unknown[] = []): Promise<T[]> {
       return (await pg.query<T>(text, params)).rows;
     },
   };
+}
+
+export async function useTestDb(): Promise<{ pg: PGlite; reset: () => Promise<void> }> {
+  const pg = new PGlite();
+  await pg.exec(SCHEMA);
+  const db = pgAdapter(pg);
   setDb(db);
   return {
     pg,

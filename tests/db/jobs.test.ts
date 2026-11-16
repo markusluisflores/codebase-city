@@ -1,8 +1,11 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createOrReuseJob, getJob, setJobPhase } from '@/lib/db/jobs';
 import { DAILY_LIMIT, MONTHLY_LIMIT, releaseQuota, reserveQuota } from '@/lib/db/limits';
-import { useTestDb } from '../helpers/pgliteDb';
+import { setDb } from '@/lib/db/client';
+import { pgAdapter, useTestDb } from '../helpers/pgliteDb';
 
+// PGlite is one in-process connection, so statements are serialised: these tests prove statement-level
+// interleaving and the SQL itself, not real row-lock waits across connections (see the task report).
 let t: Awaited<ReturnType<typeof useTestDb>>;
 beforeAll(async () => {
   t = await useTestDb();
@@ -55,8 +58,28 @@ describe('quota', () => {
   });
 
   it('does not let a release go below zero', async () => {
+    await t.pg.query(
+      `INSERT INTO usage_counters (period, count) VALUES ('d:2026-11-16', 0), ('m:2026-11', 0)`,
+    );
     await releaseQuota('2026-11-16');
-    expect((await counters())['d:2026-11-16'] ?? 0).toBe(0);
+    expect(await counters()).toEqual({ 'd:2026-11-16': 0, 'm:2026-11': 0 });
+  });
+
+  it('gives the daily unit back when the monthly step throws', async () => {
+    setDb({
+      query: async (text, params) => {
+        if (String(params?.[0]).startsWith('m:') && text.includes('INSERT INTO usage_counters')) {
+          throw new Error('network');
+        }
+        return pgAdapter(t.pg).query(text, params);
+      },
+    });
+    try {
+      await expect(reserveQuota(NOON)).rejects.toThrow('network');
+    } finally {
+      setDb(pgAdapter(t.pg));
+    }
+    expect((await counters())['d:2026-11-16']).toBe(0);
   });
 
   it('rejects a malformed reservation date', async () => {
@@ -159,6 +182,33 @@ describe('createOrReuseJob', () => {
     }
   });
 
+  it('never moves a phase backwards', async () => {
+    const { id } = await createOrReuseJob('octo', 'repo', NOON);
+    await setJobPhase(id, 'computing');
+    await setJobPhase(id, 'cloning');
+    await setJobPhase(id, 'queued');
+    expect((await getJob(id, NOON))?.phase).toBe('computing');
+  });
+
+  it('hands the unit back if the job is failed between the reservation and the reserved mark', async () => {
+    setDb({
+      query: async (text, params) => {
+        if (text.startsWith('UPDATE jobs SET reserved = true')) {
+          setDb(pgAdapter(t.pg));
+          await setJobPhase(String(params?.[0]), 'failed', 'timeout'); // reserved is still false: releases nothing
+        }
+        return pgAdapter(t.pg).query(text, params);
+      },
+    });
+    try {
+      await createOrReuseJob('octo', 'repo', NOON);
+    } finally {
+      setDb(pgAdapter(t.pg));
+    }
+    expect((await counters())['d:2026-11-16']).toBe(0);
+    expect((await counters())['m:2026-11']).toBe(0);
+  });
+
   it('sweeps a stale row (6 minutes) for the repo: failed timeout, released, a new job is created', async () => {
     const old = await createOrReuseJob('octo', 'repo', NOON);
     const fresh = await createOrReuseJob('octo', 'repo', at(NOON, 6 * MIN));
@@ -218,5 +268,24 @@ describe('getJob', () => {
   it('returns null for an unknown or malformed id without touching SQL', async () => {
     expect(await getJob('11111111-1111-4111-8111-111111111111', NOON)).toBeNull();
     expect(await getJob("x'; DROP TABLE jobs;--", NOON)).toBeNull();
+  });
+});
+
+describe('createOrReuseJob failure paths', () => {
+  it('fails the new row and returns the unit when marking it reserved throws', async () => {
+    setDb({
+      query: async (text, params) => {
+        if (text.startsWith('UPDATE jobs SET reserved = true')) throw new Error('network');
+        return pgAdapter(t.pg).query(text, params);
+      },
+    });
+    try {
+      await expect(createOrReuseJob('octo', 'repo', NOON)).rejects.toThrow('network');
+    } finally {
+      setDb(pgAdapter(t.pg));
+    }
+    expect(await counters()).toEqual({ 'd:2026-11-16': 0, 'm:2026-11': 0 });
+    const next = await createOrReuseJob('octo', 'repo', NOON);
+    expect(next.reused).toBe(false);
   });
 });

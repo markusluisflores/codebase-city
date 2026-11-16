@@ -45,3 +45,4 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   ts      timestamptz NOT NULL
 );
 CREATE INDEX IF NOT EXISTS login_attempts_ip_ts ON login_attempts (ip_hash, ts);
+CREATE INDEX IF NOT EXISTS login_attempts_ts ON login_attempts (ts);

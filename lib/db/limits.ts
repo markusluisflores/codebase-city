@@ -39,13 +39,24 @@ export async function reserveQuota(
   const keys = counterKeys(utcDay(now));
   const daily = await db.query(TAKE_UNIT, [keys.day, DAILY_LIMIT]);
   if (daily.length === 0) return { ok: false, reason: 'daily' };
-  const monthly = await db.query(TAKE_UNIT, [keys.month, MONTHLY_LIMIT]);
-  if (monthly.length === 0) {
-    await db.query(`UPDATE usage_counters SET count = GREATEST(count - 1, 0) WHERE period = $1`, [
+  const giveDailyBack = () =>
+    db.query(`UPDATE usage_counters SET count = GREATEST(count - 1, 0) WHERE period = $1`, [
       keys.day,
     ]);
+  let monthly: unknown[];
+  try {
+    monthly = await db.query(TAKE_UNIT, [keys.month, MONTHLY_LIMIT]);
+  } catch (err) {
+    // The daily unit is already taken: give it back so a failed monthly step cannot leak it.
+    await giveDailyBack().catch(() => undefined);
+    throw err;
+  }
+  if (monthly.length === 0) {
+    await giveDailyBack();
     return { ok: false, reason: 'monthly' };
   }
+  // Known gap, unfixable without a transaction: a process killed after this point but before the
+  // caller marks the job reserved leaks one unit for that day.
   return { ok: true };
 }
 

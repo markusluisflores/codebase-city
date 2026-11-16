@@ -25,6 +25,8 @@ const PHASES: readonly string[] = [
   'failed',
 ];
 
+const FORWARD_ORDER = ['queued', 'cloning', 'reading_history', 'computing', 'done'];
+
 const keyPart = (s: string): string => s.toLowerCase();
 
 interface JobRow {
@@ -140,10 +142,18 @@ export async function createOrReuseJob(
       await failJob(id, reservation.reason);
       return { id, reused: false };
     }
-    const marked = await db.query(
-      `UPDATE jobs SET reserved = true WHERE id = $1 AND phase NOT IN ('done', 'failed') RETURNING id`,
-      [id],
-    );
+    let marked: unknown[];
+    try {
+      marked = await db.query(
+        `UPDATE jobs SET reserved = true WHERE id = $1 AND phase NOT IN ('done', 'failed') RETURNING id`,
+        [id],
+      );
+    } catch (err) {
+      // Do not leave a queued row that blocks the repo, and do not leak the unit just taken.
+      await releaseQuota(utcDay(now)).catch(() => undefined);
+      await failJob(id, 'db_write_failed').catch(() => undefined);
+      throw err;
+    }
     // The row was failed in between (for example swept): hand the unit back, nothing holds it.
     if (marked.length === 0) await releaseQuota(utcDay(now));
     return { id, reused: false };
@@ -161,9 +171,12 @@ export async function setJobPhase(id: string, phase: JobPhase, errorCode?: strin
     await failJob(id, errorCode ?? 'unknown');
     return;
   }
+  // Phases only move forward: a late or duplicate update cannot regress a live job.
   await getDb().query(
-    `UPDATE jobs SET phase = $2 WHERE id = $1 AND phase NOT IN ('done', 'failed')`,
-    [id, phase],
+    `UPDATE jobs SET phase = $2
+      WHERE id = $1 AND phase NOT IN ('done', 'failed')
+        AND array_position($3::text[], phase) < array_position($3::text[], $2)`,
+    [id, phase, FORWARD_ORDER],
   );
 }
 
