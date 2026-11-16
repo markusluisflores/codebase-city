@@ -78,12 +78,12 @@ describe('computeCoChange', () => {
     const partners = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'].map((p) => `${p}.ts`);
     const commits: Commit[] = [];
     for (let i = 0; i < 3; i++) commits.push(commit(['hub.ts', ...partners]));
-    // p7 also changes alone once, so its score is lower than the tied rest.
-    commits.push(commit(['p7.ts']));
+    // p1 also changes alone once, so it scores lower than the tied rest despite sorting first by path.
+    commits.push(commit(['p1.ts']));
     const result = computeCoChange(commits, new Set(['hub.ts', ...partners]));
     const hub = result.get('hub.ts') ?? [];
     expect(hub).toHaveLength(5);
-    expect(hub.map((c) => c.path)).toEqual(['p1.ts', 'p2.ts', 'p3.ts', 'p4.ts', 'p5.ts']);
+    expect(hub.map((c) => c.path)).toEqual(['p2.ts', 'p3.ts', 'p4.ts', 'p5.ts', 'p6.ts']);
     expect(hub.every((c, i) => i === 0 || hub[i - 1]!.score >= c.score)).toBe(true);
   });
 
