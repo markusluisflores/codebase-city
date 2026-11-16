@@ -46,5 +46,10 @@
   },
   "engines": {
     "node": ">=20.9"
+  },
+  "overrides": {
+    "@vercel/cli-config": {
+      "zod": "$zod"
+    }
   }
 }
