@@ -1,6 +1,24 @@
 # Contributing to Codebase City
 
-Setup and run instructions are added with the app scaffold, after the design doc is approved.
+## Setup
+
+Requires Node.js 20.9 or later and [gitleaks](https://github.com/gitleaks/gitleaks) (the pre-commit hook needs it).
+
+```powershell
+winget install Gitleaks.Gitleaks
+npm ci
+npm run dev
+```
+
+`npm ci` also installs the Husky hooks: gitleaks and lint-staged on commit, commitlint on the message.
+
+| Command             | What it does                   |
+| ------------------- | ------------------------------ |
+| `npm test`          | Vitest unit tests (no network) |
+| `npm run lint`      | ESLint                         |
+| `npm run typecheck` | `tsc --noEmit`                 |
+| `npm run build`     | Next.js production build       |
+| `npm run format`    | Prettier                       |
 
 ## Branch Naming
 

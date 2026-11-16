@@ -1,0 +1,16 @@
+title = "codebase-city gitleaks config"
+
+[extend]
+useDefault = true
+
+# Blocks local device paths in committed files. Patterns live only here, never in docs.
+# Regex backslashes are doubled: a single backslash would escape the next character.
+[[rules]]
+id = "local-device-path"
+description = "Local device path (drive-letter path under a Users folder, either slash style)"
+regex = '''(?i)(?:[a-z]:\\{1,2}users\\{1,2}|[a-z]:/users/|(?:^|[\s"'=(])/[a-z]/users/)'''
+keywords = ["users"]
+tags = ["privacy"]
+
+[allowlist]
+paths = ['''^\.gitleaks\.toml$''', '''^package-lock\.json$''']

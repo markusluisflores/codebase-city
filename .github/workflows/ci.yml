@@ -1,0 +1,41 @@
+# Secrets required: none.
+# Manual trigger: gh workflow run ci.yml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, typecheck, test, build, audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js with npm cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: npm
+      - name: Install dependencies from the lockfile
+        run: npm ci
+      - name: Lint with ESLint
+        run: npm run lint
+      - name: Type-check the whole project
+        run: npx tsc --noEmit
+      - name: Run unit tests
+        run: npm test
+      - name: Build the Next.js app
+        run: npm run build
+      - name: Audit dependencies for high-severity advisories
+        run: npm audit --audit-level=high
