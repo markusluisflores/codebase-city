@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { CAPS } from '@/lib/caps';
+import { validateOwnerName } from '@/lib/repo/validate';
 import type { Analysis } from './types';
 
 export const SCHEMA_VERSION = 1;
@@ -34,7 +35,8 @@ const fileStat = z.strictObject({
   lastChanged: z.number().int().nonnegative().nullable(),
   bugFixes: count,
   authors: z.array(author).max(MAX_AUTHORS),
-  mainAuthor: authorKey.nullable(),
+  // Display name (scrubbed of `@`), as in the spec; not a key.
+  mainAuthor: displayName.nullable(),
   mainAuthorShare: fraction,
   coChange: z.array(coChange).max(MAX_CO_CHANGE),
 });
@@ -53,8 +55,8 @@ const reportList = z.array(path).max(MAX_REPORT);
 const base = z.strictObject({
   schemaVersion: z.literal(SCHEMA_VERSION),
   repo: z.strictObject({
-    owner: z.string().min(1).max(100),
-    name: z.string().min(1).max(100),
+    owner: z.string().refine(validateOwnerName, 'invalid owner'),
+    name: z.string().refine(validateOwnerName, 'invalid repo name'),
     headSha: z.string().regex(/^[0-9a-f]{40}$/),
     defaultBranch: z.string().min(1).max(255),
   }),
@@ -91,5 +93,6 @@ export const analysisSchema = base.refine((a) => serialisedBytes(a) <= CAPS.maxS
 
 /** Validates untrusted JSON (from the Sandbox or the cache). Throws a ZodError on any violation. */
 export function parseAnalysis(json: unknown): Analysis {
-  return analysisSchema.parse(json) as Analysis;
+  // No cast: this return type-checks only while the schema output is assignable to `Analysis`.
+  return analysisSchema.parse(json);
 }

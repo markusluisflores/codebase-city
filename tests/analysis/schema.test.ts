@@ -12,7 +12,7 @@ function file(over: Partial<FileStat> = {}): FileStat {
     lastChanged: 1_700_000_000,
     bugFixes: 1,
     authors: [{ key: '000000000001', name: 'Ada Lovelace', share: 1 }],
-    mainAuthor: '000000000001',
+    mainAuthor: 'Ada Lovelace',
     mainAuthorShare: 1,
     coChange: [{ path: 'src/util.ts', shared: 3, score: 0.5 }],
     ...over,
@@ -118,6 +118,20 @@ describe('parseAnalysis', () => {
     rejects((a) => (a.files[0].authors[0].email = 'ada@example.com'));
     rejects((a) => (a.files[0].email = 'ada@example.com'));
     rejects((a) => (a.extra = 1));
+  });
+
+  it('rejects a mainAuthor containing @ or over 200 characters', () => {
+    rejects((a) => (a.files[0].mainAuthor = 'ada@example.com'));
+    rejects((a) => (a.files[0].mainAuthor = 'x'.repeat(201)));
+  });
+
+  it('rejects an invalid repo owner or name', () => {
+    rejects((a) => (a.repo.owner = '../x'));
+    rejects((a) => (a.repo.name = '--upload-pack=x'));
+  });
+
+  it('rejects a district ownerKey that is not 12 hex characters', () => {
+    rejects((a) => (a.districts[0].ownerKey = 'ada@example.com'));
   });
 
   it('rejects a district ownerName containing @', () => {

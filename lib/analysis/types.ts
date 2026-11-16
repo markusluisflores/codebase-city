@@ -24,7 +24,7 @@ export interface FileStat {
   bugFixes: number;
   /** At most 5. */
   authors: AuthorShare[];
-  /** Key of the main author, or null when the file has no author in the window. */
+  /** Display name of the main author (no `@`), or null when the file has no author in the window. */
   mainAuthor: string | null;
   mainAuthorShare: number;
   /** At most 5. */

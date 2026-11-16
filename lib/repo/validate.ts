@@ -1,5 +1,5 @@
-// Shared by the web function and the Sandbox job. Anchored with \A-style care:
-// JS `$` without the `m` flag matches only at the true end, so a trailing newline fails.
+// Shared by the web function and the Sandbox job. JS `$` without the `m` flag
+// matches only at the true end of input, so a trailing newline is rejected.
 const OWNER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 const HEAD_SHA = /^[0-9a-f]{40}$/;
 
