@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { validateHeadSha, validateOwnerName, validateWindowFrom } from '@/lib/repo/validate';
+import {
+  validateBranchName,
+  validateHeadSha,
+  validateOwnerName,
+  validateWindowFrom,
+} from '@/lib/repo/validate';
 
 describe('validateOwnerName', () => {
   it.each(['o', 'r-1.x', 'Next.js', 'a_b', '0abc', 'a'.repeat(100)])('accepts %s', (s) => {
@@ -72,5 +77,14 @@ describe('validateWindowFrom', () => {
     expect(validateWindowFrom(NaN)).toBe(false);
     expect(validateWindowFrom(Infinity)).toBe(false);
     expect(validateWindowFrom('1700000000' as unknown as number)).toBe(false);
+  });
+});
+
+describe('validateBranchName', () => {
+  it.each(['main', 'release/1.x', 'feat/ü', 'a'.repeat(255)])('accepts %s', (s) => {
+    expect(validateBranchName(s)).toBe(true);
+  });
+  it.each(['', '-x', '--upload-pack=x', 'a\nb', 'a\0b', 'a'.repeat(256)])('rejects %j', (s) => {
+    expect(validateBranchName(s)).toBe(false);
   });
 });

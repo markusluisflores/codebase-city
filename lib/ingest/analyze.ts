@@ -1,5 +1,5 @@
 import { SCHEMA_VERSION } from '../analysis/schema';
-import { CAPS } from '../caps';
+import { MAX_ANALYSIS_BYTES } from '../caps';
 import type { Analysis } from '../analysis/types';
 import { computeCoChange } from './cochange';
 import { computeFileStats, isBot, isBugFix } from './metrics';
@@ -118,7 +118,7 @@ function serialisedBytes(a: Analysis): number {
  * schema (`parseAnalysis`) is the backstop. `maxFiles` is likewise the caller's check (`checkCaps`).
  */
 function fitToSizeBound(analysis: Analysis): Analysis {
-  if (serialisedBytes(analysis) <= CAPS.maxStdoutBytes) return analysis;
+  if (serialisedBytes(analysis) <= MAX_ANALYSIS_BYTES) return analysis;
   const capsHit = [...analysis.stats.capsHit, 'size_trimmed'].sort(compare);
   let current = analysis;
   for (const step of SIZE_STEPS) {
@@ -131,7 +131,7 @@ function fitToSizeBound(analysis: Analysis): Analysis {
         authors: f.authors.slice(0, step.authors),
       })),
     };
-    if (serialisedBytes(current) <= CAPS.maxStdoutBytes) break;
+    if (serialisedBytes(current) <= MAX_ANALYSIS_BYTES) break;
   }
   return current;
 }
