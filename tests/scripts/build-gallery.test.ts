@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, existsSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -12,6 +12,7 @@ import {
   buildGallery,
   galleryFileName,
   parseGalleryList,
+  runBuiltJob,
 } from '@/scripts/build-gallery';
 
 const SHA = 'b'.repeat(40);
@@ -215,5 +216,32 @@ describe('committed gallery files', () => {
   it('scripts/gallery.json is a list of valid repo entries', () => {
     const raw = JSON.parse(readFileSync(join(process.cwd(), 'scripts', 'gallery.json'), 'utf8'));
     expect(() => parseGalleryList(raw)).not.toThrow();
+  });
+});
+
+describe('runBuiltJob', () => {
+  const script = (body: string) => {
+    const p = join(tmp(), 'fake-job.mjs');
+    writeFileSync(p, body);
+    return p;
+  };
+
+  it('decodes a multi-byte character split across stdout chunks intact', async () => {
+    const bundle = script(`
+      const buf = Buffer.from('{"p":"' + 'é'.repeat(5) + '"}' + String.fromCharCode(10), 'utf8');
+      process.stdout.write(buf.subarray(0, 7)); // splits the first é in half
+      setTimeout(() => process.stdout.write(buf.subarray(7)), 50);
+    `);
+    let out = '';
+    const code = await runBuiltJob(['--'], { write: (l) => (out += l) }, { bundle });
+    expect(code).toBe(0);
+    expect(out).toBe('{"p":"ééééé"}' + String.fromCharCode(10));
+    expect(out).not.toContain(String.fromCharCode(0xfffd));
+  });
+
+  it('kills a hung job after the timeout', async () => {
+    const bundle = script('setInterval(() => {}, 1000);');
+    const code = await runBuiltJob(['--'], {}, { bundle, timeoutMs: 300 });
+    expect(code).not.toBe(0);
   });
 });

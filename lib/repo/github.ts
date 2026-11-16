@@ -116,7 +116,7 @@ async function getJson(
   } catch {
     throw new GitHubError('github_error');
   }
-  if (text.length > opts.maxBytes) throw new GitHubError('bad_response');
+  if (Buffer.byteLength(text, 'utf8') > opts.maxBytes) throw new GitHubError('bad_response');
   try {
     return { body: JSON.parse(text) as Json, link: res.headers.get('link') };
   } catch {

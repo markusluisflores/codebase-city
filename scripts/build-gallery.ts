@@ -11,6 +11,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { CAPS } from '../lib/caps';
 import { parseAnalysis } from '../lib/analysis/schema';
 import type { Analysis } from '../lib/analysis/types';
 import { checkCaps, fetchRepoFacts, GitHubError, type RepoFacts } from '../lib/repo/github';
@@ -37,26 +38,42 @@ type RunJobFn = (argv: string[], deps: { write?: (line: string) => void }) => Pr
  * process, so the gallery uses the exact artefact the Sandbox runs. The job is not imported:
  * bundling it would trigger its own entry point. stderr is dropped.
  */
-const runBuiltJob: RunJobFn = (argv, deps) =>
-  new Promise((resolve, reject) => {
+export function runBuiltJob(
+  argv: string[],
+  deps: { write?: (line: string) => void },
+  opts: { bundle?: string; timeoutMs?: number } = {},
+): Promise<number> {
+  return new Promise((resolve, reject) => {
     const child = spawn(
       process.execPath,
-      [join(process.cwd(), 'dist', 'sandbox-job.mjs'), ...argv],
-      {
-        stdio: ['ignore', 'pipe', 'ignore'],
-      },
+      [opts.bundle ?? join(process.cwd(), 'dist', 'sandbox-job.mjs'), ...argv],
+      { stdio: ['ignore', 'pipe', 'ignore'] },
     );
-    child.stdout.on('data', (d: Buffer) => deps.write?.(d.toString('utf8')));
-    child.on('error', reject);
-    child.on('close', (code) => resolve(code ?? 1));
+    // Collect bytes and decode once: a multi-byte character can straddle two stdout chunks.
+    const chunks: Buffer[] = [];
+    child.stdout.on('data', (d: Buffer) => chunks.push(d));
+    const timer = setTimeout(
+      () => child.kill('SIGKILL'),
+      opts.timeoutMs ?? CAPS.analysisDeadlineMs,
+    );
+    child.on('error', (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      deps.write?.(Buffer.concat(chunks).toString('utf8'));
+      resolve(code ?? 1);
+    });
   });
+}
 
 /** Runs the Sandbox job locally and returns its validated Analysis; throws `Error(code)`. */
 export async function analyseLocally(
   facts: RepoFacts,
   deps: { runJobFn?: RunJobFn; parse?: (json: unknown) => Analysis } = {},
 ): Promise<Analysis> {
-  const runJobFn = deps.runJobFn ?? runBuiltJob;
+  const runJobFn = deps.runJobFn ?? ((a, d) => runBuiltJob(a, d));
   const parse = deps.parse ?? parseAnalysis;
   const dir = mkdtempSync(join(tmpdir(), 'cc-gallery-'));
   try {

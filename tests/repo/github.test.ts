@@ -95,6 +95,8 @@ describe('fetchRepoFacts', () => {
     ]);
     // every request goes to api.github.com, built from validated parts
     for (const c of calls) expect(new URL(c.url).origin).toBe('https://api.github.com');
+    const commitsCall = calls.find((c) => new URL(c.url).pathname.endsWith('/commits'))!;
+    expect(new URL(commitsCall.url).searchParams.get('per_page')).toBe('1'); // the Link-header trick
     expect(calls.map((c) => new URL(c.url).pathname)).toEqual([
       '/repos/owner/repo',
       '/repos/owner/repo/commits',
@@ -111,6 +113,21 @@ describe('fetchRepoFacts', () => {
   it('uses 1 for the total when there is no Link header (single commit)', async () => {
     const { fetchFn } = mockFetch({ commits: () => json(commitsBody()) });
     expect((await fetchRepoFacts('owner', 'repo', deps(fetchFn))).totalCommits).toBe(1);
+  });
+
+  it('uses the page count only from rel="last"; next/prev alone fall back to the array length', async () => {
+    const onlyNext = mockFetch({
+      commits: () =>
+        json(commitsBody(), { headers: { link: '<https://api.github.com/x?page=2>; rel="next"' } }),
+    });
+    expect((await fetchRepoFacts('owner', 'repo', deps(onlyNext.fetchFn))).totalCommits).toBe(1);
+    const noPage = mockFetch({
+      commits: () =>
+        json(commitsBody(), { headers: { link: '<https://api.github.com/x>; rel="last"' } }),
+    });
+    await expect(fetchRepoFacts('owner', 'repo', deps(noPage.fetchFn))).rejects.toMatchObject({
+      code: 'bad_response',
+    });
   });
 
   it('reports a truncated tree without throwing', async () => {
