@@ -2,7 +2,7 @@
 
 ## Setup
 
-Requires Node.js 20.9 or later and [gitleaks](https://github.com/gitleaks/gitleaks) (the pre-commit hook needs it).
+Requires Node.js 22.12 or later and [gitleaks](https://github.com/gitleaks/gitleaks) (the pre-commit hook needs it).
 
 ```powershell
 winget install Gitleaks.Gitleaks
