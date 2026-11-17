@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseAnalysis, SCHEMA_VERSION } from '@/lib/analysis/schema';
-import { CAPS } from '@/lib/caps';
+import { CAPS, MAX_ANALYSIS_BYTES } from '@/lib/caps';
 import { analyze, windowStart } from '@/lib/ingest/analyze';
 import { gitLogRaw, makeRepo, type ScriptedCommit } from '../helpers/makeRepo';
 
@@ -336,7 +336,9 @@ describe('serialised size', () => {
     const bytes = Buffer.byteLength(JSON.stringify(result), 'utf8');
     expect(result.files).toHaveLength(groups * 6);
     expect(bytes).toBeGreaterThan(CAPS.maxStdoutBytes * 0.5);
-    expect(bytes).toBeLessThanOrEqual(CAPS.maxStdoutBytes);
+    // Headroom: the printed line plus phase lines and a newline must stay within the runner's stdout cap.
+    expect(bytes).toBeLessThanOrEqual(MAX_ANALYSIS_BYTES);
+    expect(MAX_ANALYSIS_BYTES).toBe(CAPS.maxStdoutBytes - 1024);
     expect(result.stats.capsHit).toEqual(['size_trimmed']);
     // Trimmed, not emptied: co-change is reduced, the main author is kept, report card intact.
     expect(result.files[0]?.coChange.length).toBeLessThan(5);

@@ -20,3 +20,17 @@ export function validateHeadSha(s: string): boolean {
 export function validateWindowFrom(n: number): boolean {
   return typeof n === 'number' && Number.isInteger(n) && n >= WINDOW_MIN && n <= WINDOW_MAX;
 }
+
+/**
+ * A default branch name, used only as a label in `Analysis.repo` (it never reaches a command).
+ * 1 to 255 characters, not starting with `-`, no control characters.
+ */
+export function validateBranchName(s: string): boolean {
+  return (
+    typeof s === 'string' &&
+    s.length >= 1 &&
+    s.length <= 255 &&
+    !s.startsWith('-') &&
+    !/[\x00-\x1f\x7f]/.test(s)
+  );
+}

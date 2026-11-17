@@ -8,6 +8,21 @@ export type Commit = {
   files: string[];
 };
 
+/**
+ * The history command's fixed arguments (spec section 7). The Sandbox job and the test
+ * helper `gitLogRaw` both use this one list, so the command cannot drift from what
+ * `parseLog` accepts. `%aN`/`%aE` (not `%an`/`%ae`) are the mailmap-aware forms: with
+ * `--use-mailmap` the lower-case ones ignore the mailmap; without it they are identical. Callers append `--since`, the mailmap flags and the revision.
+ */
+export const GIT_LOG_ARGS: readonly string[] = [
+  'log',
+  '--no-merges',
+  '--no-renames',
+  '--name-only',
+  '-z',
+  '--format=%x1e%H%x1f%aN%x1f%aE%x1f%at%x1f%s',
+];
+
 const RS = '\x1e';
 const US = '\x1f';
 /** A record starts with RS, then a full commit hash, then US. Requiring the hash keeps a hostile path that begins with RS from splitting a record. */

@@ -13,3 +13,4 @@ coverage/
 .repo-cache/
 .vercel/
 *.tsbuildinfo
+.env*

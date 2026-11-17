@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { GIT_LOG_ARGS } from '../../lib/ingest/parseLog';
 
 export type ScriptedCommit = {
   author: string;
@@ -115,14 +116,7 @@ export async function makeRepo(
  * deliberately omitted here; the sandbox job (Task 9) owns mailmap coverage.
  */
 export function gitLogRaw(dir: string, sinceUnix?: number): string {
-  const args = [
-    'log',
-    '--no-merges',
-    '--no-renames',
-    '--name-only',
-    '-z',
-    '--format=%x1e%H%x1f%an%x1f%ae%x1f%at%x1f%s',
-  ];
+  const args = [...GIT_LOG_ARGS];
   if (sinceUnix !== undefined) args.push(`--since=${sinceUnix}`);
   try {
     return git(dir, args);
