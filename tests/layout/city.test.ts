@@ -121,6 +121,41 @@ describe('cityLayout', () => {
     for (const p of expectedDistrictPaths(input.map((f) => f.path))) expect(have.has(p)).toBe(true);
   });
 
+  it('does not lose root files when a real folder is named "(files)"', () => {
+    const l = cityLayout([
+      { path: 'README.md', size: 1 },
+      { path: '(files)/x/y.ts', size: 1 },
+      { path: '(files)/z.ts', size: 1 },
+    ]);
+    expect(l.buildings.map((b) => b.path).sort()).toEqual([
+      '(files)/x/y.ts',
+      '(files)/z.ts',
+      'README.md',
+    ]);
+  });
+
+  it('keeps each building inside its own leaf district and sibling leaf districts apart', () => {
+    const input = bigCity(2000);
+    const l = cityLayout(input);
+    const byPath = new Map(l.districts.map((d) => [d.path, d]));
+    for (const b of l.buildings) {
+      const leaf = b.path.split('/').slice(0, 2).join('/');
+      expect(contains(byPath.get(leaf)!, b)).toBe(true);
+    }
+    const leaves = [...expectedDistrictPaths(input.map((f) => f.path))]
+      .filter((p) => p.includes('/'))
+      .map((p) => byPath.get(p)!);
+    for (let i = 0; i < leaves.length; i++) {
+      for (let j = i + 1; j < leaves.length; j++) {
+        const a = leaves[i]!;
+        const b = leaves[j]!;
+        const apartX = Math.abs(a.x - b.x) >= (a.w + b.w) / 2 - EPS;
+        const apartZ = Math.abs(a.z - b.z) >= (a.d + b.d) / 2 - EPS;
+        expect(apartX || apartZ).toBe(true);
+      }
+    }
+  });
+
   it('puts every building inside some district', () => {
     const l = cityLayout(bigCity(400));
     for (const b of l.buildings) expect(l.districts.some((d) => contains(d, b))).toBe(true);

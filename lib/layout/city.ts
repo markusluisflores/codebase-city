@@ -25,6 +25,9 @@ export interface CityLayout {
 
 /** Layout-only pseudo-district for files that sit directly in the root or in a depth-1 folder with subfolders. */
 const FILES = '(files)';
+/** Internal name of the pseudo-district, which cannot collide with a real folder called "(files)". */
+const PSEUDO = '\u0000files';
+const display = (path: string): string => path.split(PSEUDO).join(FILES);
 const OTHER = '(other)';
 
 /** Fraction of a grid cell a building occupies; the rest is the gap between buildings. */
@@ -45,7 +48,7 @@ interface DNode {
 }
 
 function segmentsOf(path: string): string[] {
-  return path.split('/').filter((s) => s !== '');
+  return path.split('/');
 }
 
 /** Leaf district of each file: its depth-1 or depth-2 folder, or a "(files)" pseudo-district. */
@@ -58,9 +61,9 @@ function assignDistricts(files: SizedFile[]): Placed[] {
   return files.map((f) => {
     const dirs = segmentsOf(f.path).slice(0, -1);
     let district: string;
-    if (dirs.length === 0) district = FILES;
+    if (dirs.length === 0) district = PSEUDO;
     else if (dirs.length === 1)
-      district = hasSubfolders.has(dirs[0]!) ? `${dirs[0]}/${FILES}` : dirs[0]!;
+      district = hasSubfolders.has(dirs[0]!) ? `${dirs[0]}/${PSEUDO}` : dirs[0]!;
     else district = `${dirs[0]}/${dirs[1]}`;
     return { path: f.path, size: f.size, district };
   });
@@ -114,7 +117,7 @@ export function cityLayout(files: SizedFile[], maxBuildings = 5000): CityLayout 
     maxBuildings,
     (b) => b.district,
     (district, tail) => ({
-      path: `${district}/${OTHER}`,
+      path: `${display(district)}/${OTHER}`,
       size: tail.reduce((s, b) => s + cleanSize(b.size), 0),
       district,
     }),
@@ -149,7 +152,13 @@ export function cityLayout(files: SizedFile[], maxBuildings = 5000): CityLayout 
     if (n.depth === 0) return;
     const w = n.x1 - n.x0;
     const h = n.y1 - n.y0;
-    districts.push({ path: n.data.path, x: n.x0 + w / 2 - half, z: n.y0 + h / 2 - half, w, d: h });
+    districts.push({
+      path: display(n.data.path),
+      x: n.x0 + w / 2 - half,
+      z: n.y0 + h / 2 - half,
+      w,
+      d: h,
+    });
     if (n.children === undefined) grids.set(n.data.path, { x0: n.x0, y0: n.y0, w, h });
   });
 
