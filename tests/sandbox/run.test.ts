@@ -129,7 +129,7 @@ describe('runAnalysisInSandbox', () => {
     const spy = vi.fn();
     const create = vi.fn();
     const missing = Object.assign(
-      new Error("ENOENT: no such file, open 'C:\app\dist\sandbox-job.mjs'"),
+      new Error("ENOENT: no such file, open '/app/dist/sandbox-job.mjs'"),
       {
         code: 'ENOENT',
       },

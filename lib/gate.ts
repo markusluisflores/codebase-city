@@ -1,6 +1,7 @@
 /**
  * True when a request path reaches a gated live-analysis route: `/api/analyze` and `/api/jobs/...`. The path is normalised first
- * (percent-decoded up to twice, with a third round that must find nothing left to decode or the path is treated as gated; dot segments resolved, empty segments dropped, case folded, `;` params cut), so
+ * (percent-decoded up to twice, with a third round that must find nothing left to decode or the path
+ * is treated as gated; dot segments resolved, empty segments dropped, case folded, `;` params cut), so
  * trailing slashes, case, percent-encoding and `//` or `/./` tricks cannot slip past. Anything that
  * cannot be decoded is treated as gated. Gated means every method, not just POST.
  */
