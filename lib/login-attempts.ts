@@ -19,13 +19,3 @@ export interface LoginAttemptStore {
   recordFailedLogin(ip: string, now: Date): Promise<void>;
   tooManyAttempts(ip: string, now: Date): Promise<boolean>;
 }
-
-/** Placeholder until Task 12b wires the Task 12a store in. It throws, so the login route fails closed (503). */
-export const loginAttempts: LoginAttemptStore = {
-  async recordFailedLogin() {
-    throw new Error('login attempt store is not wired yet (Task 12a/12b)');
-  },
-  async tooManyAttempts() {
-    throw new Error('login attempt store is not wired yet (Task 12a/12b)');
-  },
-};

@@ -27,6 +27,10 @@ CREATE TABLE IF NOT EXISTS jobs (
   created_at  timestamptz NOT NULL
 );
 
+-- Task 12b: true once the job's Sandbox has been created. From then on a failure (including a stale
+-- sweep) keeps the quota unit; only a failure before that point gives it back (Markus, 2026-11-16).
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS sandbox_started boolean NOT NULL DEFAULT false;
+
 -- At most one non-terminal job per repo: concurrent first requests share one row.
 CREATE UNIQUE INDEX IF NOT EXISTS jobs_one_active_per_repo
   ON jobs (owner, name)

@@ -10,14 +10,16 @@ import {
   validateWindowFrom,
 } from '../repo/validate';
 
-export type SandboxErrorCode =
-  | 'timeout'
-  | 'clone_failed'
-  | 'stale_head'
-  | 'invalid_output'
-  | 'too_many_commits_in_window'
-  | 'too_many_files'
-  | 'bad_argument';
+export const SANDBOX_ERROR_CODES = [
+  'timeout',
+  'clone_failed',
+  'stale_head',
+  'invalid_output',
+  'too_many_commits_in_window',
+  'too_many_files',
+  'bad_argument',
+] as const;
+export type SandboxErrorCode = (typeof SANDBOX_ERROR_CODES)[number];
 
 export class SandboxError extends Error {
   constructor(readonly code: SandboxErrorCode) {
@@ -46,6 +48,12 @@ export interface RunInput {
   head: { path: string; size: number }[];
   deadlineMs: number;
   onPhase?: (phase: Phase) => void;
+  /**
+   * Called (and awaited) once the Sandbox exists, before anything runs in it. From this point the
+   * run is billable, so the caller records it (Task 12b: no refund after this). A rejection aborts
+   * the run with the Sandbox stopped.
+   */
+  onSandboxCreated?: () => void | Promise<void>;
 }
 
 /** The slice of `@vercel/sandbox` this runner uses, so tests can mock it. */
@@ -201,6 +209,8 @@ export async function runAnalysisInSandbox(
       persistent: false,
       resources: { vcpus: 2 },
     });
+    // The Sandbox exists and is billable from here, even if the deadline already won.
+    await input.onSandboxCreated?.();
     if (aborted) {
       // The deadline (or an error) won while the Sandbox was being created.
       await stopBounded(sandbox);

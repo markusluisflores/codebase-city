@@ -15,13 +15,15 @@ import {
  * shape we rely on), `empty_repo` (no commits), `invalid_commit_date` (latest commit dated before
  * 2002 or in the future: the 24-month window cannot be trusted, so nothing is analysed).
  */
-export type GitHubErrorCode =
-  | 'not_found'
-  | 'github_rate_limited'
-  | 'github_error'
-  | 'bad_response'
-  | 'empty_repo'
-  | 'invalid_commit_date';
+export const GITHUB_ERROR_CODES = [
+  'not_found',
+  'github_rate_limited',
+  'github_error',
+  'bad_response',
+  'empty_repo',
+  'invalid_commit_date',
+] as const;
+export type GitHubErrorCode = (typeof GITHUB_ERROR_CODES)[number];
 
 /** The message is the code only: no response body, URL, header or token can leak through it. */
 export class GitHubError extends Error {
@@ -251,12 +253,14 @@ export async function fetchRepoFacts(
   };
 }
 
-export type CapResult =
-  | { ok: true }
-  | {
-      ok: false;
-      code: 'repo_too_large' | 'too_many_commits' | 'too_many_files' | 'tree_truncated';
-    };
+export const CAP_ERROR_CODES = [
+  'repo_too_large',
+  'too_many_commits',
+  'too_many_files',
+  'tree_truncated',
+] as const;
+export type CapErrorCode = (typeof CAP_ERROR_CODES)[number];
+export type CapResult = { ok: true } | { ok: false; code: CapErrorCode };
 
 /**
  * Pre-clone caps. `too_many_commits` is the TOTAL commit count; the in-window cap is the

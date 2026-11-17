@@ -216,7 +216,7 @@ describe('login handler', () => {
     spies.forEach((s) => s.mockRestore());
   });
 
-  it('the exported route refuses (503) until the Task 12a store is wired in', async () => {
+  it('the exported route fails closed (503) when the database is not configured', async () => {
     const res = await sessionPost(new NextRequest(loginReq({ password: PASSWORD })));
     expect(res.status).toBe(503);
     expect(res.headers.get('set-cookie')).toBeNull();
@@ -249,9 +249,16 @@ describe('POST /api/analyze handler (called directly, bypassing proxy.ts)', () =
     expect((await analyze(`${SESSION_COOKIE}=${other}`)).status).toBe(401);
   });
 
-  it('passes the session check with a valid cookie (the body is completed in Task 12b)', async () => {
+  it('passes the session check with a valid cookie and reaches body validation', async () => {
     const token = await createSessionToken(SECRET);
-    expect((await analyze(`${SESSION_COOKIE}=${token}`)).status).toBe(501);
+    const res = await analyzePost(
+      new NextRequest('http://localhost/api/analyze', {
+        method: 'POST',
+        body: JSON.stringify({ repo: 'bad;rm -rf' }),
+        headers: { cookie: `${SESSION_COOKIE}=${token}`, 'content-type': 'application/json' },
+      }),
+    );
+    expect(res.status).toBe(400);
   });
 
   it('denies when the server is misconfigured, even with a cookie signed by the configured secret', async () => {
@@ -318,10 +325,25 @@ describe('proxy.ts gate', () => {
     for (const m of proxyConfig.matcher) expect(m.startsWith('/api/')).toBe(true);
   });
 
-  it('keeps the login, job status and every public viewer path open', async () => {
+  it('gates job status like analyze, for every method and path trick', async () => {
+    for (const path of [
+      '/api/jobs/6f1c1f0e-0000-4000-8000-000000000000',
+      '/api/JOBS/6f1c1f0e-0000-4000-8000-000000000000/',
+      '/api/jobs/%36f1c1f0e-0000-4000-8000-000000000000',
+      '/api//jobs/x',
+      '/api/jobs',
+      '/x/../api/jobs/x',
+    ]) {
+      for (const method of ['GET', 'POST', 'DELETE']) {
+        expect((await proxy(req(path, method))).status, `${method} ${path}`).toBe(401);
+      }
+    }
+  });
+
+  it('keeps the login, the public viewer API and every public viewer path open', async () => {
     for (const [path, method] of [
       ['/api/session', 'POST'],
-      ['/api/jobs/6f1c1f0e-0000-4000-8000-000000000000', 'GET'],
+      ['/api/analysis/vercel/next.js', 'GET'],
       ['/', 'GET'],
       ['/gate', 'GET'],
       ['/r/vercel/next.js', 'GET'],
@@ -334,7 +356,7 @@ describe('proxy.ts gate', () => {
 
   it('does not treat a lookalike route as the analyze route', async () => {
     expect(isNext(await proxy(req('/api/analyzer')))).toBe(true);
-    expect(isNext(await proxy(req('/api/jobs/analyze')))).toBe(true);
+    expect(isNext(await proxy(req('/api/jobsx')))).toBe(true);
   });
 
   it('denies when the secret is not configured', async () => {

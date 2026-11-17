@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createOrReuseJob, getJob, setJobPhase } from '@/lib/db/jobs';
+import { createOrReuseJob, getJob, markSandboxStarted, setJobPhase } from '@/lib/db/jobs';
 import { DAILY_LIMIT, MONTHLY_LIMIT, releaseQuota, reserveQuota } from '@/lib/db/limits';
 import { setDb } from '@/lib/db/client';
 import { pgAdapter, useTestDb } from '../helpers/pgliteDb';
@@ -308,5 +308,60 @@ describe('lost response on the reserved mark', () => {
     }
     // the two live jobs still hold their units; the third gave back its own, once
     expect(await counters()).toEqual({ 'd:2026-11-16': 2, 'm:2026-11': 2 });
+  });
+});
+
+describe('refund line: only a failure before the Sandbox exists refunds', () => {
+  it('refunds a failure before the Sandbox was created, exactly once', async () => {
+    const { id } = await createOrReuseJob('o', 'r', NOON);
+    expect((await counters())['d:2026-11-16']).toBe(1);
+    await setJobPhase(id, 'failed', 'clone_failed');
+    await setJobPhase(id, 'failed', 'clone_failed');
+    expect((await counters())['d:2026-11-16']).toBe(0);
+  });
+
+  it('keeps the unit when the Sandbox was created (flag stored)', async () => {
+    const { id } = await createOrReuseJob('o', 'r', NOON);
+    await markSandboxStarted(id);
+    await setJobPhase(id, 'failed', 'timeout');
+    expect(await counters()).toMatchObject({ 'd:2026-11-16': 1, 'm:2026-11': 1 });
+  });
+
+  it('keeps the unit when the caller says the failure came after Sandbox creation', async () => {
+    const { id } = await createOrReuseJob('o', 'r', NOON);
+    await setJobPhase(id, 'failed', 'invalid_output', { keepQuota: true });
+    expect((await counters())['d:2026-11-16']).toBe(1);
+  });
+
+  it('does not refund a stale job whose Sandbox started (sweep by create and by read)', async () => {
+    const a = await createOrReuseJob('o', 'r', NOON);
+    await markSandboxStarted(a.id);
+    const later = at(NOON, 6 * MIN);
+    const b = await createOrReuseJob('o', 'r', later);
+    expect(b.reused).toBe(false);
+    expect((await getJob(a.id, later))?.errorCode).toBe('timeout');
+    expect((await counters())['d:2026-11-16']).toBe(2); // a keeps its unit, b holds one
+
+    const c = await createOrReuseJob('o', 'x', NOON);
+    await markSandboxStarted(c.id);
+    expect((await getJob(c.id, later))?.phase).toBe('failed');
+    expect((await counters())['d:2026-11-16']).toBe(3);
+  });
+
+  it('still refunds a stale job whose Sandbox never started', async () => {
+    const a = await createOrReuseJob('o', 'r', NOON);
+    expect((await getJob(a.id, at(NOON, 6 * MIN)))?.phase).toBe('failed');
+    expect((await counters())['d:2026-11-16']).toBe(0);
+  });
+
+  it('markSandboxStarted never touches a terminal row', async () => {
+    const { id } = await createOrReuseJob('o', 'r', NOON);
+    await setJobPhase(id, 'failed', 'clone_failed');
+    await markSandboxStarted(id);
+    const r = await t.pg.query<{ sandbox_started: boolean }>(
+      'SELECT sandbox_started FROM jobs WHERE id = $1',
+      [id],
+    );
+    expect(r.rows[0]?.sandbox_started).toBe(false);
   });
 });

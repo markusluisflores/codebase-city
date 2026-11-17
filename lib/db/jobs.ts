@@ -54,33 +54,38 @@ function toJob(r: JobRow): Job {
  * reservation date, all in ONE statement. The row lock plus the non-terminal check mean exactly one
  * caller can win, so the unit is released exactly once however many callers race (the sweep, a
  * status read, the route's own failure path). A job already `done` or `failed` is left alone.
- * `releaseIfUnreserved` is for the one caller that cannot tell whether its `reserved = true` update
+ * A job whose Sandbox was created (`sandbox_started`) keeps its unit, and so does a failure the
+ * caller says happened after Sandbox creation (`keepQuota`): only a failure before the Sandbox exists
+ * refunds. `releaseIfUnreserved` is for the one caller that cannot tell whether its `reserved = true` update
  * committed: the row lock then decides, and the unit goes back once either way.
  */
 async function failJob(
   id: string,
   errorCode: string,
   releaseIfUnreserved = false,
+  keepQuota = false,
 ): Promise<boolean> {
   const rows = await getDb().query(
     `WITH old AS (
-       SELECT id, reserved, reserved_on FROM jobs
+       SELECT id, reserved, reserved_on, sandbox_started FROM jobs
         WHERE id = $1 AND phase NOT IN ('done', 'failed')
           FOR UPDATE
      ),
      upd AS (
        UPDATE jobs j SET phase = 'failed', error_code = $2, reserved = false
          FROM old WHERE j.id = old.id
-       RETURNING j.id, old.reserved AS was_reserved, old.reserved_on AS day
+       RETURNING j.id, old.reserved AS was_reserved, old.reserved_on AS day,
+                 old.sandbox_started AS started
      ),
      rel AS (
        UPDATE usage_counters c SET count = GREATEST(c.count - 1, 0)
          FROM upd
-        WHERE (upd.was_reserved OR $3::boolean) AND c.period IN ('d:' || upd.day, 'm:' || substr(upd.day, 1, 7))
+        WHERE (upd.was_reserved OR $3::boolean) AND NOT upd.started AND NOT $4::boolean
+          AND c.period IN ('d:' || upd.day, 'm:' || substr(upd.day, 1, 7))
        RETURNING 1
      )
      SELECT id FROM upd`,
-    [id, errorCode, releaseIfUnreserved],
+    [id, errorCode, releaseIfUnreserved, keepQuota],
   );
   return rows.length > 0;
 }
@@ -172,10 +177,15 @@ export async function createOrReuseJob(
  * Advances a job. `failed` goes through the single failing statement (releasing the quota once);
  * `done` and the other phases only move a non-terminal row, so a finished job is never reopened.
  */
-export async function setJobPhase(id: string, phase: JobPhase, errorCode?: string): Promise<void> {
+export async function setJobPhase(
+  id: string,
+  phase: JobPhase,
+  errorCode?: string,
+  opts: { keepQuota?: boolean } = {},
+): Promise<void> {
   if (!PHASES.includes(phase)) throw new Error('invalid job phase');
   if (phase === 'failed') {
-    await failJob(id, errorCode ?? 'unknown');
+    await failJob(id, errorCode ?? 'unknown', false, opts.keepQuota === true);
     return;
   }
   // Phases only move forward: a late or duplicate update cannot regress a live job.
@@ -184,6 +194,17 @@ export async function setJobPhase(id: string, phase: JobPhase, errorCode?: strin
       WHERE id = $1 AND phase NOT IN ('done', 'failed')
         AND array_position($3::text[], phase) < array_position($3::text[], $2)`,
     [id, phase, FORWARD_ORDER],
+  );
+}
+
+/**
+ * Records that the job's Sandbox exists, so no later failure or stale sweep refunds its quota unit.
+ * Only a non-terminal row is touched.
+ */
+export async function markSandboxStarted(id: string): Promise<void> {
+  await getDb().query(
+    `UPDATE jobs SET sandbox_started = true WHERE id = $1 AND phase NOT IN ('done', 'failed')`,
+    [id],
   );
 }
 

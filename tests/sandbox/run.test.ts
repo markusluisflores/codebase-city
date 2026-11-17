@@ -102,6 +102,41 @@ describe('runAnalysisInSandbox', () => {
     expect(m.stop).toHaveBeenCalledTimes(1);
   });
 
+  it('calls onSandboxCreated once, after create and before anything runs; never when create or the bundle fails', async () => {
+    const input = base();
+    const m = mock(() => lines(...phases, JSON.stringify(analysisFor(input)) + '\n'));
+    const order: string[] = [];
+    await runAnalysisInSandbox(
+      { ...input, onSandboxCreated: () => void order.push(`created:${m.commands.length}`) },
+      deps(m),
+    );
+    expect(order).toEqual(['created:0']);
+
+    const spy = vi.fn();
+    await expect(
+      runAnalysisInSandbox(
+        { ...input, onSandboxCreated: spy },
+        {
+          readBundle: async () => Buffer.from('x'),
+          createSandbox: async () => Promise.reject(new Error('no')),
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'clone_failed' });
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('stops the Sandbox and fails when onSandboxCreated rejects', async () => {
+    const m = mock(() => lines('{}\n'));
+    await expect(
+      runAnalysisInSandbox(
+        { ...base(), onSandboxCreated: async () => Promise.reject(new Error('flag lost')) },
+        deps(m),
+      ),
+    ).rejects.toBeInstanceOf(SandboxError);
+    expect(m.stop).toHaveBeenCalledTimes(1);
+    expect(m.commands).toHaveLength(0);
+  });
+
   it('handles lines split across chunks', async () => {
     const input = base();
     const text = phases.join('') + JSON.stringify(analysisFor(input)) + '\n';

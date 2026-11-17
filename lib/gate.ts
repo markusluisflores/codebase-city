@@ -1,5 +1,5 @@
 /**
- * True when a request path reaches the gated live-analysis route. The path is normalised first
+ * True when a request path reaches a gated live-analysis route: `/api/analyze` and `/api/jobs/...`. The path is normalised first
  * (decoded up to twice, dot segments resolved, empty segments dropped, case folded, `;` params cut), so
  * trailing slashes, case, percent-encoding and `//` or `/./` tricks cannot slip past. Anything that
  * cannot be decoded is treated as gated. Gated means every method, not just POST.
@@ -25,5 +25,5 @@ export function isGatedPath(pathname: string): boolean {
     if (seg === '..') segments.pop();
     else segments.push(seg);
   }
-  return segments[0] === 'api' && segments[1] === 'analyze';
+  return segments[0] === 'api' && (segments[1] === 'analyze' || segments[1] === 'jobs');
 }
