@@ -387,6 +387,18 @@ describe('refund line: only a failure before the Sandbox is created refunds, exa
     expect(await unit()).toBe(1);
   });
 
+  it('a Sandbox that is still being created when the deadline wins keeps the unit', async () => {
+    const sb = fakeSandbox();
+    const slowCreate = sb.deps.createSandbox!;
+    sb.deps.createSandbox = async (o) => {
+      await new Promise((r) => setTimeout(r, 300));
+      return slowCreate(o);
+    };
+    const row = await run(sb, { deadlineMs: 60 });
+    expect(row).toMatchObject({ phase: 'failed', error_code: 'timeout' });
+    expect(await unit()).toBe(1);
+  });
+
   it('db_write_failed (the cache write throws) keeps the unit', async () => {
     const sb = fakeSandbox();
     const h = harness({}, sb);

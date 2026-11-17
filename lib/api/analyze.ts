@@ -144,7 +144,12 @@ export async function runLiveJob(
 
   const fail = async (code: ErrorCode): Promise<void> => {
     logCode('job_failed', code, repoLabel);
-    await setJobPhase(id, 'failed', code, { keepQuota: sandboxCreated }).catch(() => undefined);
+    // A timeout always keeps the unit: the deadline can win while `create()` is still in flight, and a
+    // Sandbox created after that is billed even though `onSandboxCreated` never ran in time.
+    // Known gap (accepted): if the database is down for both the flag write and this write, the stale
+    // sweep later refunds that one unit; an attacker cannot cause it.
+    const keepQuota = sandboxCreated || code === 'timeout';
+    await setJobPhase(id, 'failed', code, { keepQuota }).catch(() => undefined);
   };
 
   let analysis: Analysis;

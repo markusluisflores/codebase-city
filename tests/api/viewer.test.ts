@@ -42,8 +42,8 @@ describe('GET /api/analysis/:owner/:name (public viewer lookup)', () => {
   it('needs no session, never calls GitHub (fetch) and returns a stored analysis with cache headers', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await putCached(sampleAnalysis('Octo', 'Repo'), NOW);
-    const res = await viewerRoute.GET(new Request('http://localhost/x'), {
-      params: Promise.resolve({ owner: 'OCTO', name: 'repo' }),
+    const res = await viewerRoute.GET(new Request('http://localhost/api/analysis/octo/repo'), {
+      params: Promise.resolve({ owner: 'octo', name: 'repo' }),
     });
     const body = await res.json();
     expect(res.status).toBe(200);
@@ -64,11 +64,11 @@ describe('GET /api/analysis/:owner/:name (public viewer lookup)', () => {
     expect((await res.json()).source).toBe('gallery');
   });
 
-  it('a miss is a briefly cached 404 with a fixed message', async () => {
+  it('a miss is an uncached 404 with a fixed message', async () => {
     const res = await handleViewer('octo', 'nothing-here');
     expect(res.status).toBe(404);
     expect((await res.json()).error).toBe('analysis_not_found');
-    expect(res.headers.get('cache-control')).toMatch(/s-maxage=30/);
+    expect(res.headers.get('cache-control')).toBe('no-store');
   });
 
   it.each(['..', '.', '-x', 'a b', 'a;b', '', 'x'.repeat(101), '%2e%2e'])(
@@ -92,6 +92,38 @@ describe('GET /api/analysis/:owner/:name (public viewer lookup)', () => {
     expect(buf.length).toBeGreaterThan(4_500_000);
     const parsed = JSON.parse(new TextDecoder().decode(buf));
     expect(parsed.analysis.files).toHaveLength(6000);
+  });
+
+  it('redirects a query string or a case variant to the canonical URL before any database read', async () => {
+    setDb({
+      query: async () => {
+        throw new Error('must not be called');
+      },
+    });
+    for (const url of [
+      'http://localhost/api/analysis/octo/repo?x=1',
+      'http://localhost/api/analysis/Octo/Repo',
+      'http://localhost/api/analysis/octo/repo?',
+    ]) {
+      const res = await viewerRoute.GET(new Request(url), {
+        params: Promise.resolve({
+          owner: url.includes('Octo') ? 'Octo' : 'octo',
+          name: url.includes('Repo') ? 'Repo' : 'repo',
+        }),
+      });
+      expect(res.status, url).toBe(308);
+      expect(res.headers.get('location')).toBe('/api/analysis/octo/repo');
+    }
+  });
+
+  it('serves the canonical URL, and rejects an owner GitHub cannot have (gallery name collision)', async () => {
+    await putCached(sampleAnalysis('Octo', 'Repo'), NOW);
+    const ok = await viewerRoute.GET(new Request('http://localhost/api/analysis/octo/repo'), {
+      params: Promise.resolve({ owner: 'octo', name: 'repo' }),
+    });
+    expect(ok.status).toBe(200);
+    expect((await handleViewer('x__y', 'z')).status).toBe(400);
+    expect(await readGallery('x__y', 'z')).toBeNull();
   });
 
   it('a database failure is a fixed 503 with no raw error', async () => {

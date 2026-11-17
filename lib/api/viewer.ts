@@ -2,6 +2,7 @@ import { SCHEMA_VERSION } from '@/lib/analysis/schema';
 import type { Analysis } from '@/lib/analysis/types';
 import { getCached } from '@/lib/db/cache';
 import { readGallery } from '@/lib/gallery';
+import { isGitHubOwner } from '@/lib/repo/url';
 import { validateOwnerName } from '@/lib/repo/validate';
 import { apiError, streamEnvelope } from './response';
 
@@ -13,8 +14,9 @@ export interface ViewerDeps {
  * Cached for the CDN so the public path cannot be used to hammer the database: a stored analysis can be
  * 8 MB of jsonb that is parsed on every uncached read. A re-analysis shows up within the s-maxage.
  */
-export const VIEWER_CACHE = 'public, max-age=0, s-maxage=300, stale-while-revalidate=3600';
-const MISS_CACHE = 'public, max-age=0, s-maxage=30';
+export const VIEWER_CACHE = 'public, max-age=0, s-maxage=300';
+// A miss is never cached: a visitor who analyses a small repo must see it as soon as the job is done.
+const MISS_CACHE = 'no-store';
 
 /**
  * GET /api/analysis/:owner/:name. Public. Reads the static gallery, then the Postgres row, and nothing
@@ -24,8 +26,26 @@ export async function handleViewer(
   owner: string,
   name: string,
   deps: ViewerDeps = {},
+  requestUrl?: string,
 ): Promise<Response> {
-  if (!validateOwnerName(owner) || !validateOwnerName(name)) return apiError('invalid_repo');
+  if (!isGitHubOwner(owner) || !validateOwnerName(name)) return apiError('invalid_repo');
+  // The CDN keys on the full URL, so a query string or a case variant would each cost one database
+  // read of a possibly 8 MB row. Anything but the canonical URL is redirected before any read.
+  if (requestUrl !== undefined) {
+    const canonical = `/api/analysis/${owner.toLowerCase()}/${name.toLowerCase()}`;
+    let url: URL | null = null;
+    try {
+      url = new URL(requestUrl);
+    } catch {
+      url = null;
+    }
+    if (url && (url.pathname !== canonical || requestUrl.includes('?'))) {
+      return new Response(null, {
+        status: 308,
+        headers: { location: canonical, 'cache-control': 'public, max-age=0, s-maxage=86400' },
+      });
+    }
+  }
   const gallery = await (deps.gallery ?? readGallery)(owner, name);
   if (gallery) {
     return streamEnvelope({ source: 'gallery', analysedAt: null }, gallery, {

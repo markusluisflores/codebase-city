@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseAnalysis, SCHEMA_VERSION } from '@/lib/analysis/schema';
 import type { Analysis } from '@/lib/analysis/types';
+import { isGitHubOwner } from '@/lib/repo/url';
 import { validateOwnerName } from '@/lib/repo/validate';
 
 /** `public/gallery/<owner>__<repo>.json`, written by `scripts/build-gallery.ts`. */
@@ -17,7 +18,7 @@ export async function readGallery(
   name: string,
   dir: string = GALLERY_DIR,
 ): Promise<Analysis | null> {
-  if (!validateOwnerName(owner) || !validateOwnerName(name)) return null;
+  if (!isGitHubOwner(owner) || !validateOwnerName(name)) return null;
   const want = `${owner}__${name}.json`.toLowerCase();
   try {
     const hit = (await readdir(/*turbopackIgnore: true*/ dir)).find(
