@@ -77,7 +77,9 @@ describe('windowStart', () => {
 });
 
 describe('analyze end to end on a real fixture repo', () => {
-  it('passes parseAnalysis and contains no @ anywhere', async () => {
+  // Slow part: the fixture runs a real `git` child process per commit (25 commits plus init), and process
+  // spawns are slow on Windows, so this test can pass 5 s there. The analysis itself takes milliseconds.
+  it('passes parseAnalysis and contains no @ anywhere', { timeout: 20_000 }, async () => {
     const { dir } = await fixture(scripted(25));
     const raw = gitLogRaw(dir);
     const latest = T0 + 24 * DAY;
@@ -110,7 +112,7 @@ describe('analyze end to end on a real fixture repo', () => {
     ).toBe(true);
   });
 
-  it('fills co-change from the commits', async () => {
+  it('fills co-change from the commits', { timeout: 20_000 }, async () => {
     const { dir } = await fixture(scripted(25));
     const analysis = analyze({
       repo: REPO,

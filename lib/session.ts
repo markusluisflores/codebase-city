@@ -2,6 +2,8 @@
 // Web Crypto only, so it runs in the proxy and in Node route handlers. Secrets are parameters
 // (callers read the environment), and nothing here logs or echoes a secret, password or IP.
 
+import { errorMessage, errorStatus, type ErrorCode } from '@/lib/errors';
+
 // "__Host-" makes browsers require Secure + Path=/ + no Domain, so a sibling subdomain cannot plant a cookie.
 export const SESSION_COOKIE = '__Host-cc_session';
 export const SESSION_MAX_AGE_S = 60 * 60 * 24 * 7; // 7 days
@@ -92,8 +94,12 @@ export function assertSessionConfig(env: Record<string, string | undefined>): {
 
 const NO_STORE = { 'cache-control': 'no-store' };
 
-function jsonError(error: string, status: number, extra: Record<string, string> = {}): Response {
-  return Response.json({ error }, { status, headers: { ...NO_STORE, ...extra } });
+/** Same body shape as the API errors (`{error, message}`), with the code's fixed message and status. */
+function jsonError(code: ErrorCode, extra: Record<string, string> = {}): Response {
+  return Response.json(
+    { error: code, message: errorMessage(code) },
+    { status: errorStatus(code), headers: { ...NO_STORE, ...extra } },
+  );
 }
 export { jsonError };
 
@@ -120,14 +126,14 @@ export async function requireSession(
   try {
     ({ secret } = assertSessionConfig(env));
   } catch {
-    return jsonError('misconfigured', 503);
+    return jsonError('misconfigured');
   }
   const ok = await verifySessionToken(
     secret,
     readCookie(req.headers.get('cookie'), SESSION_COOKIE),
     now,
   );
-  return ok ? null : jsonError('unauthorized', 401);
+  return ok ? null : jsonError('unauthorized');
 }
 
 /** `Set-Cookie` value for a new session: HttpOnly, Secure, SameSite=Lax, host-only, with an expiry. */

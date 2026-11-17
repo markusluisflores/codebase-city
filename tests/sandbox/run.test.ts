@@ -125,6 +125,26 @@ describe('runAnalysisInSandbox', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  it('a missing bundle is an internal_error (our defect), before any Sandbox is created', async () => {
+    const spy = vi.fn();
+    const create = vi.fn();
+    const missing = Object.assign(
+      new Error("ENOENT: no such file, open 'C:\app\dist\sandbox-job.mjs'"),
+      {
+        code: 'ENOENT',
+      },
+    );
+    const e = await runAnalysisInSandbox(
+      { ...base(), onSandboxCreated: spy },
+      { readBundle: async () => Promise.reject(missing), createSandbox: create },
+    ).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(SandboxError);
+    expect((e as SandboxError).code).toBe('internal_error');
+    expect(String((e as Error).message)).toBe('internal_error');
+    expect(create).not.toHaveBeenCalled();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
   it('stops the Sandbox and fails when onSandboxCreated rejects', async () => {
     const m = mock(() => lines('{}\n'));
     await expect(
