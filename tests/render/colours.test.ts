@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FileStat } from '@/lib/analysis/types';
+import { hotspotScore } from '@/lib/ingest/report';
 import {
   AGE_BUCKET_DAYS,
   AUTHOR_COLOURS,
@@ -190,6 +191,18 @@ describe('buildColourContext', () => {
       expect(v).toBeGreaterThanOrEqual(0);
       expect(v).toBeLessThanOrEqual(1);
     }
+  });
+
+  it('uses the report card hotspot score and leaves ignored files (lockfiles) grey', () => {
+    const fs = [
+      file({ path: 'a.ts', changes: 2, size: 10 }),
+      file({ path: 'b.ts', changes: 9, size: 90 }),
+      file({ path: 'package-lock.json', changes: 99, size: 9999 }),
+    ];
+    const c = ctxFor(fs);
+    expect(c.hotspot.has('package-lock.json')).toBe(false);
+    expect(c.hotspot.get('b.ts')).toBe(hotspotScore([fs[0]!, fs[1]!]).get('b.ts'));
+    expect(colourFor('hotspot', fs[2]!, c)).toBe(COLD);
   });
 
   it('handles an empty file list', () => {

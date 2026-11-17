@@ -1,4 +1,5 @@
 import type { FileStat } from '@/lib/analysis/types';
+import { hotspotScore, isIgnored } from '@/lib/ingest/report';
 
 export type ColourMode = 'hotspot' | 'churn' | 'age' | 'bugfix' | 'language' | 'ownership';
 
@@ -162,20 +163,6 @@ export function colourFor(mode: ColourMode, file: FileStat, ctx: ColourContext):
   }
 }
 
-/** Percentile rank in 0 to 1 per value, ties sharing the mid-rank. */
-function percentileRanks(values: number[]): Map<number, number> {
-  const sorted = [...values].sort((a, b) => a - b);
-  const ranks = new Map<number, number>();
-  let i = 0;
-  while (i < sorted.length) {
-    let j = i;
-    while (j < sorted.length && sorted[j] === sorted[i]) j++;
-    ranks.set(sorted[i]!, (i + (j - i) / 2) / sorted.length);
-    i = j;
-  }
-  return ranks;
-}
-
 function rankDesc(counts: Map<string, number>): string[] {
   return [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
@@ -183,20 +170,18 @@ function rankDesc(counts: Map<string, number>): string[] {
 }
 
 /**
- * Derives everything the colour modes need from the file list: the hotspot score (percentile rank
- * of changes times percentile rank of size, 0 to 1), each file's main author, the top authors and
+ * Derives everything the colour modes need from the file list: the hotspot score (the report card's `hotspotScore`), each file's main author, the top authors and
  * the top languages. `now` is the window end in unix seconds.
  */
 export function buildColourContext(files: readonly FileStat[], now: number): ColourContext {
-  const changeRank = percentileRanks(files.map((f) => f.changes));
-  const sizeRank = percentileRanks(files.map((f) => f.size));
-  const hotspot = new Map<string, number>();
+  // Same score as the report card (lockfiles, minified and vendored files are left out of the ranking,
+  // so they show grey in hotspot mode), so the city and the "riskiest" list agree.
+  const hotspot = hotspotScore(files.filter((f) => !isIgnored(f.path)));
   const owners = new Map<string, string>();
   const ownerNames = new Map<string, string>();
   const ownerCounts = new Map<string, number>();
   const languageCounts = new Map<string, number>();
   for (const f of files) {
-    hotspot.set(f.path, (changeRank.get(f.changes) ?? 0) * (sizeRank.get(f.size) ?? 0));
     const main = f.mainAuthor === null ? undefined : f.authors[0];
     if (main) {
       owners.set(f.path, main.key);

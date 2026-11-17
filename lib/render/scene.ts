@@ -84,7 +84,7 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
   scene.add(sun);
 
   const controls = new OrbitControls(camera, canvas);
-  controls.enableDamping = !reducedMotion();
+  controls.enableDamping = !reducedMotion(); // read once; a mid-session OS change applies on the next load
   controls.maxPolarAngle = Math.PI / 2 - 0.03;
   controls.autoRotateSpeed = 2;
 
@@ -162,11 +162,15 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
     options.onHover?.(null, { x: 0, y: 0 });
   }
   function onPointerDown(e: PointerEvent): void {
+    if (e.button !== 0 || !e.isPrimary) {
+      downAt = null; // right-click pan, or a second finger of a pinch: never a selection
+      return;
+    }
     downAt = { x: e.clientX, y: e.clientY };
     options.onHover?.(null, { x: 0, y: 0 });
   }
   function onPointerUp(e: PointerEvent): void {
-    if (!downAt) return;
+    if (!downAt || e.button !== 0 || !e.isPrimary) return;
     const moved = Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y);
     downAt = null;
     if (moved > CLICK_SLOP_PX) return;
@@ -221,14 +225,19 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
   function applyColours(colours: readonly string[]): void {
     if (!buildings) return;
     const count = layout.buildings.length;
-    const data = new Float32Array(count * 3);
+    // Write into the existing buffer: replacing the attribute would strand its GL buffer on every mode switch.
+    let attr = buildings.instanceColor;
+    if (!attr || attr.count !== count) {
+      attr = new InstancedBufferAttribute(new Float32Array(count * 3), 3);
+      buildings.instanceColor = attr;
+    }
+    const data = attr.array as Float32Array;
     const c = new Color();
     for (let i = 0; i < count; i++) {
       c.set(colours[i] ?? TOKENS.cold);
       c.toArray(data, i * 3);
     }
-    buildings.instanceColor = new InstancedBufferAttribute(data, 3);
-    buildings.instanceColor.needsUpdate = true;
+    attr.needsUpdate = true;
     dirty = true;
   }
 
