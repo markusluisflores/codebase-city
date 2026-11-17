@@ -1,6 +1,6 @@
 # Viewer design mockup (2026-11-17)
 
-Approved by Markus on 2026-11-17 through the design-process skill: every option was shown with an ASCII mockup and a rendered palette page. The decisions are in the [Decisions](#decisions) table; the rest of this file keeps the rejected options visible so the reasoning survives.
+Approved by Markus on 2026-11-17 through the design-process skill: layout options were shown as ASCII mockups, and palette and font options as rendered specimen pages. The decisions are in the [Decisions](#decisions) table; the rest of this file keeps the rejected options visible so the reasoning survives.
 
 Related: `docs/superpowers/specs/2026-11-13-codebase-city-design.md`.
 
