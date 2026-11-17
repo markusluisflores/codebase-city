@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Codebase City viewer: palette options</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 24px; color: #111827; background: #fff; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.note { color: #475569; font-size: 12px; margin: 0 0 16px; max-width: 900px; }
+  section.opt { border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; margin-bottom: 18px; break-inside: avoid; }
+  h2 { font-size: 15px; margin: 0 0 8px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .panel { flex: 1 1 380px; border-radius: 8px; padding: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  .panel h3 { font-size: 12px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .chips { display: flex; gap: 0; margin-bottom: 4px; }
+  .chip { flex: 1; height: 34px; }
+  .labels { display: flex; font: 9px ui-monospace, monospace; color: var(--muted); margin-bottom: 8px; }
+  .labels span { flex: 1; text-align: center; }
+  .cat { display: flex; gap: 4px; margin-bottom: 8px; }
+  .cat div { width: 26px; height: 18px; border-radius: 3px; }
+  .map { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; margin: 8px 0; }
+  .map div { height: 26px; border-radius: 2px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 12px; display: flex; justify-content: space-between; }
+  .accent { color: var(--accent); font-weight: 600; }
+  small { color: var(--muted); font-size: 10px; }
+</style>
+</head>
+<body>
+<h1>Codebase City viewer: palette options</h1>
+<p class="note">Each option shows a sequential ramp (cold to hot, used by the hotspot, churn, age and bug-fix modes), the shared Okabe-Ito categorical palette (language and ownership modes, 8 authors plus grey for "others"), the neutral grey for cold files, and a small in-context sample, in dark and light. All ramps are perceptually ordered by lightness so they survive common colour-vision deficiencies; the legend always carries numbers, never colour alone.</p>
+
+<!-- OPTION A -->
+<section class="opt">
+<h2>A. Night Ember (inferno-style ramp, dark-first)</h2>
+<div class="row">
+  <div class="panel" style="--bg:#0b1020;--surface:#131a2e;--text:#e6eaf5;--muted:#94a3b8;--border:#2a3350;--accent:#fb923c">
+    <h3>Dark</h3>
+    <div class="chips"><div class="chip" style="background:#280b54"></div><div class="chip" style="background:#65156e"></div><div class="chip" style="background:#9f2a63"></div><div class="chip" style="background:#d44842"></div><div class="chip" style="background:#f57d15"></div><div class="chip" style="background:#fac127"></div><div class="chip" style="background:#fcffa4"></div></div>
+    <div class="labels"><span>#280b54</span><span>#65156e</span><span>#9f2a63</span><span>#d44842</span><span>#f57d15</span><span>#fac127</span><span>#fcffa4</span></div>
+    <div class="cat"><div style="background:#E69F00"></div><div style="background:#56B4E9"></div><div style="background:#009E73"></div><div style="background:#F0E442"></div><div style="background:#0072B2"></div><div style="background:#D55E00"></div><div style="background:#CC79A7"></div><div style="background:#999999"></div></div>
+    <div class="map"><div style="background:#280b54"></div><div style="background:#65156e"></div><div style="background:#9f2a63"></div><div style="background:#d44842"></div><div style="background:#f57d15"></div><div style="background:#fac127"></div><div style="background:#fcffa4"></div><div style="background:#6b7280"></div><div style="background:#65156e"></div><div style="background:#280b54"></div><div style="background:#d44842"></div><div style="background:#fac127"></div><div style="background:#9f2a63"></div><div style="background:#6b7280"></div><div style="background:#f57d15"></div><div style="background:#280b54"></div></div>
+    <div class="card"><span>src/runtime/scheduler.ts</span><span class="accent">hotspot 94</span></div>
+    <small>bg #0b1020 · surface #131a2e · text #e6eaf5 · border #2a3350 · accent #fb923c · cold #6b7280</small>
+  </div>
+  <div class="panel" style="--bg:#f6f7fb;--surface:#ffffff;--text:#111827;--muted:#475569;--border:#d9deea;--accent:#c2410c">
+    <h3>Light</h3>
+    <div class="chips"><div class="chip" style="background:#280b54"></div><div class="chip" style="background:#65156e"></div><div class="chip" style="background:#9f2a63"></div><div class="chip" style="background:#d44842"></div><div class="chip" style="background:#f57d15"></div><div class="chip" style="background:#fac127"></div><div class="chip" style="background:#fcffa4"></div></div>
+    <div class="labels"><span>cold</span><span></span><span></span><span></span><span></span><span></span><span>hot</span></div>
+    <div class="cat"><div style="background:#E69F00"></div><div style="background:#56B4E9"></div><div style="background:#009E73"></div><div style="background:#F0E442"></div><div style="background:#0072B2"></div><div style="background:#D55E00"></div><div style="background:#CC79A7"></div><div style="background:#999999"></div></div>
+    <div class="map"><div style="background:#280b54"></div><div style="background:#65156e"></div><div style="background:#9f2a63"></div><div style="background:#d44842"></div><div style="background:#f57d15"></div><div style="background:#fac127"></div><div style="background:#fcffa4"></div><div style="background:#6b7280"></div><div style="background:#65156e"></div><div style="background:#280b54"></div><div style="background:#d44842"></div><div style="background:#fac127"></div><div style="background:#9f2a63"></div><div style="background:#6b7280"></div><div style="background:#f57d15"></div><div style="background:#280b54"></div></div>
+    <div class="card"><span>src/runtime/scheduler.ts</span><span class="accent">hotspot 94</span></div>
+    <small>bg #f6f7fb · surface #ffffff · text #111827 · border #d9deea · accent #c2410c</small>
+  </div>
+</div>
+</section>
+
+<!-- OPTION B -->
+<section class="opt">
+<h2>B. Deep Sea (viridis-style ramp, dark-first, calmer)</h2>
+<div class="row">
+  <div class="panel" style="--bg:#0b1020;--surface:#131a2e;--text:#e6eaf5;--muted:#94a3b8;--border:#2a3350;--accent:#2dd4bf">
+    <h3>Dark</h3>
+    <div class="chips"><div class="chip" style="background:#482878"></div><div class="chip" style="background:#3e4989"></div><div class="chip" style="background:#26828e"></div><div class="chip" style="background:#1f9e89"></div><div class="chip" style="background:#6ece58"></div><div class="chip" style="background:#b5de2b"></div><div class="chip" style="background:#fde725"></div></div>
+    <div class="labels"><span>#482878</span><span>#3e4989</span><span>#26828e</span><span>#1f9e89</span><span>#6ece58</span><span>#b5de2b</span><span>#fde725</span></div>
+    <div class="cat"><div style="background:#E69F00"></div><div style="background:#56B4E9"></div><div style="background:#009E73"></div><div style="background:#F0E442"></div><div style="background:#0072B2"></div><div style="background:#D55E00"></div><div style="background:#CC79A7"></div><div style="background:#999999"></div></div>
+    <div class="map"><div style="background:#482878"></div><div style="background:#3e4989"></div><div style="background:#26828e"></div><div style="background:#1f9e89"></div><div style="background:#6ece58"></div><div style="background:#b5de2b"></div><div style="background:#fde725"></div><div style="background:#6b7280"></div><div style="background:#3e4989"></div><div style="background:#482878"></div><div style="background:#1f9e89"></div><div style="background:#b5de2b"></div><div style="background:#26828e"></div><div style="background:#6b7280"></div><div style="background:#6ece58"></div><div style="background:#482878"></div></div>
+    <div class="card"><span>src/runtime/scheduler.ts</span><span class="accent">hotspot 94</span></div>
+    <small>bg #0b1020 · surface #131a2e · text #e6eaf5 · border #2a3350 · accent #2dd4bf · cold #6b7280</small>
+  </div>
+  <div class="panel" style="--bg:#f6f7fb;--surface:#ffffff;--text:#111827;--muted:#475569;--border:#d9deea;--accent:#0f766e">
+    <h3>Light</h3>
+    <div class="chips"><div class="chip" style="background:#482878"></div><div class="chip" style="background:#3e4989"></div><div class="chip" style="background:#26828e"></div><div class="chip" style="background:#1f9e89"></div><div class="chip" style="background:#6ece58"></div><div class="chip" style="background:#b5de2b"></div><div class="chip" style="background:#fde725"></div></div>
+    <div class="labels"><span>cold</span><span></span><span></span><span></span><span></span><span></span><span>hot</span></div>
+    <div class="cat"><div style="background:#E69F00"></div><div style="background:#56B4E9"></div><div style="background:#009E73"></div><div style="background:#F0E442"></div><div style="background:#0072B2"></div><div style="background:#D55E00"></div><div style="background:#CC79A7"></div><div style="background:#999999"></div></div>
+    <div class="map"><div style="background:#482878"></div><div style="background:#3e4989"></div><div style="background:#26828e"></div><div style="background:#1f9e89"></div><div style="background:#6ece58"></div><div style="background:#b5de2b"></div><div style="background:#fde725"></div><div style="background:#6b7280"></div><div style="background:#3e4989"></div><div style="background:#482878"></div><div style="background:#1f9e89"></div><div style="background:#b5de2b"></div><div style="background:#26828e"></div><div style="background:#6b7280"></div><div style="background:#6ece58"></div><div style="background:#482878"></div></div>
+    <div class="card"><span>src/runtime/scheduler.ts</span><span class="accent">hotspot 94</span></div>
+    <small>bg #f6f7fb · surface #ffffff · text #111827 · border #d9deea · accent #0f766e</small>
+  </div>
+</div>
+</section>
+
+<!-- OPTION C -->
+<section class="opt">
+<h2>C. Paper Heat (yellow to dark red ramp, light-first, reads like a printed heat map)</h2>
+<div class="row">
+  <div class="panel" style="--bg:#0b1020;--surface:#131a2e;--text:#e6eaf5;--muted:#94a3b8;--border:#2a3350;--accent:#f87171">
+    <h3>Dark</h3>
+    <div class="chips"><div class="chip" style="background:#ffffb2"></div><div class="chip" style="background:#fed976"></div><div class="chip" style="background:#feb24c"></div><div class="chip" style="background:#fd8d3c"></div><div class="chip" style="background:#f03b20"></div><div class="chip" style="background:#bd0026"></div><div class="chip" style="background:#800026"></div></div>
+    <div class="labels"><span>#ffffb2</span><span>#fed976</span><span>#feb24c</span><span>#fd8d3c</span><span>#f03b20</span><span>#bd0026</span><span>#800026</span></div>
+    <div class="cat"><div style="background:#E69F00"></div><div style="background:#56B4E9"></div><div style="background:#009E73"></div><div style="background:#F0E442"></div><div style="background:#0072B2"></div><div style="background:#D55E00"></div><div style="background:#CC79A7"></div><div style="background:#999999"></div></div>
+    <div class="map"><div style="background:#ffffb2"></div><div style="background:#fed976"></div><div style="background:#feb24c"></div><div style="background:#fd8d3c"></div><div style="background:#f03b20"></div><div style="background:#bd0026"></div><div style="background:#800026"></div><div style="background:#6b7280"></div><div style="background:#fed976"></div><div style="background:#ffffb2"></div><div style="background:#f03b20"></div><div style="background:#feb24c"></div><div style="background:#fd8d3c"></div><div style="background:#6b7280"></div><div style="background:#bd0026"></div><div style="background:#ffffb2"></div></div>
+    <div class="card"><span>src/runtime/scheduler.ts</span><span class="accent">hotspot 94</span></div>
+    <small>on dark the darkest reds sink into the background; this is the weak spot of C</small>
+  </div>
+  <div class="panel" style="--bg:#f6f7fb;--surface:#ffffff;--text:#111827;--muted:#475569;--border:#d9deea;--accent:#b91c1c">
+    <h3>Light</h3>
+    <div class="chips"><div class="chip" style="background:#ffffb2"></div><div class="chip" style="background:#fed976"></div><div class="chip" style="background:#feb24c"></div><div class="chip" style="background:#fd8d3c"></div><div class="chip" style="background:#f03b20"></div><div class="chip" style="background:#bd0026"></div><div class="chip" style="background:#800026"></div></div>
+    <div class="labels"><span>cold</span><span></span><span></span><span></span><span></span><span></span><span>hot</span></div>
+    <div class="cat"><div style="background:#E69F00"></div><div style="background:#56B4E9"></div><div style="background:#009E73"></div><div style="background:#F0E442"></div><div style="background:#0072B2"></div><div style="background:#D55E00"></div><div style="background:#CC79A7"></div><div style="background:#999999"></div></div>
+    <div class="map"><div style="background:#ffffb2"></div><div style="background:#fed976"></div><div style="background:#feb24c"></div><div style="background:#fd8d3c"></div><div style="background:#f03b20"></div><div style="background:#bd0026"></div><div style="background:#800026"></div><div style="background:#6b7280"></div><div style="background:#fed976"></div><div style="background:#ffffb2"></div><div style="background:#f03b20"></div><div style="background:#feb24c"></div><div style="background:#fd8d3c"></div><div style="background:#6b7280"></div><div style="background:#bd0026"></div><div style="background:#ffffb2"></div></div>
+    <div class="card"><span>src/runtime/scheduler.ts</span><span class="accent">hotspot 94</span></div>
+    <small>bg #f6f7fb · surface #ffffff · text #111827 · border #d9deea · accent #b91c1c</small>
+  </div>
+</div>
+</section>
+</body>
+</html>

@@ -21,6 +21,8 @@ Nothing yet. The plan: paste a public GitHub repo URL and get a 3D city plus a 2
 | Front end | Next.js with Three.js and a 2D treemap | Decided in the design (2026-11-13) |
 | Access model | Public gallery of cached cities; adding a new repo is password-protected | Decided 2026-11-13 (Markus: "make it public, while the adding of repos password protected"); tier is Standard (confirmed by Markus 2026-11-13), with a security review on the ingestion boundary and the gate |
 
+Neon: Postgres was the requirement; Neon was the lowest-effort Vercel Marketplace option and, being plain Postgres, is portable by changing DATABASE_URL; no written comparison against other providers.
+
 ---
 
 ## 3. Hosting: Vercel vs Railway

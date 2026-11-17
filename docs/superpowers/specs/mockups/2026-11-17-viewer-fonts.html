@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Codebase City viewer: font options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Fira+Sans:wght@400;500;600&display=swap">
+<style>
+  body { margin: 24px; font-family: system-ui, sans-serif; background: #fff; color: #111827; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .panel { flex: 1 1 420px; background: #0b1020; color: #e6eaf5; border: 1px solid #2a3350; border-radius: 10px; padding: 16px; }
+  .panel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #94a3b8; margin: 0 0 12px; font-weight: 500; }
+  .fira { font-family: 'Fira Sans', sans-serif; }
+  .fira .mono { font-family: 'Fira Code', monospace; }
+  .sys { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+  .sys .mono { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; }
+  .title { font-size: 26px; font-weight: 600; margin: 0 0 4px; }
+  .sub { font-size: 14px; color: #94a3b8; margin: 0 0 14px; }
+  .card { background: #131a2e; border: 1px solid #2a3350; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+  .path { font-size: 13px; color: #fb923c; }
+  .meta { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+  .legend { display: flex; height: 12px; border-radius: 3px; overflow: hidden; margin: 8px 0 2px; }
+  .legend div { flex: 1; }
+  .nums { display: flex; justify-content: space-between; font-size: 11px; color: #94a3b8; }
+  .num { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<h1>Codebase City viewer: font options (dark theme, Night Ember palette)</h1>
+<div class="row">
+  <div class="panel fira">
+    <h2>Fira Sans + Fira Code (recommended, self-hosted)</h2>
+    <p class="title">vuejs/core</p>
+    <p class="sub">Analysed 17 Nov 2026 at 7fd1a60 · 802 files · 1,478 commits</p>
+    <div class="card"><div class="mono path">packages/runtime-core/src/scheduler.ts</div><div class="meta">Changes <span class="num">214</span> · last changed <span class="num">3 days ago</span> · main author A. Developer (62%)</div></div>
+    <div class="card"><div class="mono path">packages/compiler-core/src/parser.ts</div><div class="meta">Changes <span class="num">187</span> · bug-fix commits <span class="num">41</span></div></div>
+    <div class="legend"><div style="background:#280b54"></div><div style="background:#65156e"></div><div style="background:#9f2a63"></div><div style="background:#d44842"></div><div style="background:#f57d15"></div><div style="background:#fac127"></div><div style="background:#fcffa4"></div></div>
+    <div class="nums"><span>0</span><span class="mono">changes in window</span><span>214+</span></div>
+    <p class="meta" style="margin-top:12px">Hotspot colouring is a heuristic: churn and size, not defects. Renames split a file's history.</p>
+  </div>
+  <div class="panel sys">
+    <h2>System font stack (Segoe UI on Windows, SF on Mac; zero load)</h2>
+    <p class="title">vuejs/core</p>
+    <p class="sub">Analysed 17 Nov 2026 at 7fd1a60 · 802 files · 1,478 commits</p>
+    <div class="card"><div class="mono path">packages/runtime-core/src/scheduler.ts</div><div class="meta">Changes <span class="num">214</span> · last changed <span class="num">3 days ago</span> · main author A. Developer (62%)</div></div>
+    <div class="card"><div class="mono path">packages/compiler-core/src/parser.ts</div><div class="meta">Changes <span class="num">187</span> · bug-fix commits <span class="num">41</span></div></div>
+    <div class="legend"><div style="background:#280b54"></div><div style="background:#65156e"></div><div style="background:#9f2a63"></div><div style="background:#d44842"></div><div style="background:#f57d15"></div><div style="background:#fac127"></div><div style="background:#fcffa4"></div></div>
+    <div class="nums"><span>0</span><span class="mono">changes in window</span><span>214+</span></div>
+    <p class="meta" style="margin-top:12px">Hotspot colouring is a heuristic: churn and size, not defects. Renames split a file's history.</p>
+  </div>
+</div>
+</body>
+</html>
