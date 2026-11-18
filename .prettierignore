@@ -8,3 +8,4 @@ docs
 .github/pull_request_template.md
 SECURITY.md
 next-env.d.ts
+public/gallery

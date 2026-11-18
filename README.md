@@ -13,14 +13,14 @@ Paste a public GitHub repo URL and get a 3D city plus a 2D treemap of its files.
 
 ## Run it locally (PowerShell)
 
-Needs Node 22 or newer (CI runs 22; `.nvmrc` says 22) and git.
+Needs Node 22.12 or newer (CI runs 22) and git.
 
 ```powershell
 npm ci
 npm run dev
 ```
 
-Open `http://localhost:3000`. The gallery and the viewer work with no environment variables. Live analysis needs a database, a Vercel Sandbox and these variables (names only; never commit values):
+Open `http://localhost:3000`. The gallery and the viewer work with no environment variables. Live analysis needs a database, Vercel Sandbox access (on Vercel the platform supplies it; locally link the project and pull its env with `vercel env pull`) and these variables (names only; never commit values):
 
 | Variable         | Needed for                                    | Notes                                                                                                                 |
 | ---------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
