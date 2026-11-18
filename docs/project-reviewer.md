@@ -1,7 +1,7 @@
 # Codebase City: Interview Guide
 
-**Last updated:** 2026-11-13
-**Last plan covered:** none yet. The design is approved and the implementation plan is written (both on the open docs PR); nothing is built. This version records the hosting research, the decision and the design's trade-offs only.
+**Last updated:** 2026-11-18
+**Last plan covered:** `docs/superpowers/plans/2026-11-13-codebase-city.md`, Tasks 0 to 16 (built and merged through the viewer, PR 19 and PR 20; Task 16, the gallery and packaging, is on the open `chore/ship-gallery` PR). Production deploy: not yet done; owed to Markus.
 
 Everything here is drawn from the project's own artifacts: `docs/requirements-seed.md`, `docs/adr/ADR-001-host-on-vercel.md`, and the 2026-11-13 design conversation. Claims from web sources are marked **verified** (read on the vendor's own page or measured by us), **secondary** (a blog or aggregator) or **unverified**. Re-check any of them before quoting a number in an interview.
 
@@ -9,16 +9,45 @@ Everything here is drawn from the project's own artifacts: `docs/requirements-se
 
 ## 1. What We Built
 
-Nothing yet. The plan: paste a public GitHub repo URL and get a 3D city plus a 2D treemap of its files, coloured by hotspot, churn, age, bug-fix density, language and ownership, with co-change arcs and a report card of files to read first. The honest value statement from the seed: real but modest, mainly for unfamiliar repos. It is a portfolio showcase.
+Paste a public GitHub repo URL and get a 3D city plus a 2D treemap of its files, coloured by hotspot, churn, age, bug-fix density, language and ownership, with co-change arcs for the selected file and a report card of files to read first. The honest value statement from the seed: real but modest, mainly for unfamiliar repos. It is a portfolio showcase.
+
+**Built and measured (as of 2026-11-18):**
+
+* Seven gallery repos, pre-analysed to static JSON: express, vite, svelte, django, cargo, vue core and the-fourth-official. `facebook/react` was chosen too but has moved to `react/react` and is about 1.1 GB on GitHub, over the 1 GB cap, so it was dropped, not substituted.
+* Analysis size: the largest gallery file is `sveltejs/svelte` at 2,677,731 bytes (2.55 MiB, about 32% of the 8 MiB bound; the bound was owed a re-measure in Task 9). Others: django 1.83 MB, cargo 0.88 MB, vite 0.86 MB, vue core 0.22 MB, express 0.06 MB, the-fourth-official 0.04 MB. So real repos near the 10,000-file cap stay well under the bound; only a dense synthetic case approaches it.
+* Rendering: 60 fps measured on a typical laptop with hardware acceleration (600 frames, p99 17 ms), auto-orbit, 5,000 buildings, hotspot colouring (Markus, one run, 2026-11-17).
+* Load: on a local dev server, the svelte analysis (2.68 MB, uncompressed) is fetched in about 0.15 s and the viewer page is interactive in about 2 s from a cold navigation (software-rendered browser pane, dev mode); both 2D and 3D views load. Production figures are not yet measured.
+* Gate: with no cookie the gallery, viewer page and `/api/analysis/...` return 200; `POST /api/analyze` and `GET /api/jobs/...` return 401 (checked locally with fake secrets).
+* Tests: 43 files, 824 tests; a test fails if a gallery file has an out-of-date `schemaVersion`.
+* Odd result worth knowing: the vite card shows "Image" as its top language (by bytes), a side effect of language-by-extension.
+
+## Spec deviations (decided during the build)
+
+| Spec said | Built | Why |
+| --- | --- | --- |
+| Luminance test: minimum adjacent gap 0.1 | 0.03, plus a monotonic cold-to-hot check | The approved Night Ember ramp has adjacent gaps from 0.031 to 0.363 |
+| `ArcLayer.tsx` overlay for co-change arcs | Arcs drawn inside the Three.js scene (`lib/render/arcs.ts`) | An overlay needs per-frame projection of 3D points while orbiting; in-scene arcs follow the camera for free |
+| Ownership mode ranks the top 8 authors by file-touches | Ranks by files an author mainly owns | Accepted by Markus on 2026-11-18 |
+| A re-analyse option behind the password | Deferred (future improvement) | A cached POST for a gallery repo or an unchanged head cannot refresh anyway; not needed for v1 |
+| 2D district hover tooltip | Landed in PR 20 | Task 15a had documented it as a decision to skip; reversed as a small follow-up |
+
+## Future improvements
+
+* Re-analyse a cached repo behind the password.
+* Show analysed repos in the home gallery (they are in the database cache but not listed).
+* District labels on the city floor and the treemap.
+* Rethink the add-a-repo and password flow (unlock first, or a dedicated "Add a repo" entry).
+* Legend covers about 45% of a phone screen; greys that look alike under achromatopsia.
+* Dependabot ignore rule for `@types/node` majors; TypeScript 7 held until typescript-eslint supports it; ESLint 9 deprecation.
 
 ## 2. Tech stack
 
 | Layer | Choice | Status |
 | ----- | ------ | ------ |
 | Hosting | Vercel (ADR-001) | Decided 2026-11-13 |
-| Git analysis | Plain TypeScript module, run inside a Vercel Sandbox | Planned; Sandbox spike passed 2026-11-14 |
+| Git analysis | Plain TypeScript module, run inside a Vercel Sandbox | Built (Tasks 3 to 9); Sandbox spike passed 2026-11-14 |
 | Database / cache | Postgres via a Vercel Marketplace partner; Neon (see the note below the table) | Neon chosen as lowest-effort option, 2026-11-17 |
-| Front end | Next.js with Three.js and a 2D treemap | Decided in the design (2026-11-13) |
+| Front end | Next.js with Three.js and a 2D treemap | Built (Tasks 13 to 15b, PR 19 and PR 20) |
 | Access model | Public gallery of cached cities; adding a new repo is password-protected | Decided 2026-11-13 (Markus: "make it public, while the adding of repos password protected"); tier is Standard (confirmed by Markus 2026-11-13), with a security review on the ingestion boundary and the gate |
 
 Neon: Postgres was the requirement; Neon was the lowest-effort Vercel Marketplace option and, being plain Postgres, is portable by changing DATABASE_URL; no written comparison against other providers.
@@ -176,7 +205,7 @@ None yet. One early lesson: an assumption about "which projects are deployed whe
 | How did you decide how to read git history? | Concept 3 |
 | What does this cost to run, and what happens if it gets popular? | Concept 4 and concept 6 |
 | What would make you switch? | ADR-001, "What would change this decision" |
-| What's still unproven? | The 8 MB analysis size bound (re-measured in Task 9), and untested corners of the spike (Fluid compute off, the 300 s limit itself, git clone under the network policy). Settled by the 2026-11 spike: start-up 0.52 s, limits, a continuation to 270 s, egress policy, Hobby terms (personal or non-commercial). Settled: the tier is Standard, confirmed by Markus on 2026-11-13, with a security review on the gate |
+| What's still unproven? | Production behaviour (not yet deployed), Sandbox CPU time per job, and untested corners of the spike (Fluid compute off, the 300 s limit itself, git clone under the network policy). Settled by the 2026-11 spike: start-up 0.52 s, limits, a continuation to 270 s, egress policy, Hobby terms (personal or non-commercial). Settled: the tier is Standard, confirmed by Markus on 2026-11-13, with a security review on the gate |
 
 ## 8. Sources
 
