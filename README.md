@@ -76,4 +76,6 @@ Authors are shown by display name and a key. The key is the first 12 hex charact
 - The legend covers about 45% of a phone screen; make it collapsible.
 - Two greys (others and no activity) look alike under achromatopsia.
 - Dependabot ignore rule for `@types/node` majors; TypeScript 7 is held until typescript-eslint supports it; ESLint 9 is deprecated, plan the move.
+- Per-session limit on `POST /api/analyze`: GitHub calls happen before the quota check, so someone with the password could use up the GitHub token's hourly limit.
+- After the first production deploy, probe that a spoofed `x-vercel-forwarded-for` header cannot defeat the login limit (the header's platform behaviour is still unverified).
 - Time slider over history (out of v1 scope).
