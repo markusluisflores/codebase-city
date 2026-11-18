@@ -68,12 +68,16 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
 
   const select = useCallback((path: string) => {
     setSelectedPath(path);
+    setSheetOpen(true); // On phones the details live in the sheet; show them.
     city.current?.flyToPath(path);
   }, []);
 
   const onCitySelect = useCallback((hit: CityHit | null) => {
     if (hit === null) setSelectedPath(null);
-    else if (hit.kind === 'building') setSelectedPath(hit.path);
+    else if (hit.kind === 'building') {
+      setSelectedPath(hit.path);
+      setSheetOpen(true);
+    }
   }, []);
 
   const cityTooltip = useCallback(
@@ -100,7 +104,12 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
         <span className={s.analysed}>{`analysed on ${day} at ${shortSha(repo.headSha)}`}</span>
         <span className={s.spacer} />
         <div className={s.toggle} role="group" aria-label="View">
-          <button type="button" aria-pressed={effectiveView === '3d'} onClick={() => setView('3d')}>
+          <button
+            type="button"
+            aria-pressed={effectiveView === '3d'}
+            disabled={noWebGL}
+            onClick={() => setView('3d')}
+          >
             3D
           </button>
           <button type="button" aria-pressed={effectiveView === '2d'} onClick={() => setView('2d')}>

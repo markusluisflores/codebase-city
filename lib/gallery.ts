@@ -57,5 +57,5 @@ export async function listGalleryCards(dir: string = GALLERY_DIR): Promise<Galle
       // Skip a bad file rather than break the home page.
     }
   }
-  return cards;
+  return cards.sort((a, b) => `${a.name}/${a.owner}`.localeCompare(`${b.name}/${b.owner}`));
 }

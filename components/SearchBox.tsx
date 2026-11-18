@@ -32,7 +32,7 @@ export function SearchBox({ paths, onSelect }: SearchBoxProps) {
         role="combobox"
         aria-label="Search files"
         aria-expanded={showList}
-        aria-controls={`${id}-list`}
+        aria-controls={showList ? `${id}-list` : undefined}
         aria-activedescendant={showList ? `${id}-${active}` : undefined}
         aria-autocomplete="list"
         placeholder="Search files"
