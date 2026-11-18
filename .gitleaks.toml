@@ -12,5 +12,7 @@ regex = '''(?i)(?:[a-z]:\\{1,2}users\\{1,2}|[a-z]:/users/|(?:^|[\s"'=(])/[a-z]/u
 keywords = ["users"]
 tags = ["privacy"]
 
+# The gallery JSON holds 12-character pseudonymous author keys (hash prefixes) that the generic-api-key rule
+# mistakes for secrets. Checked by hand when the gallery is rebuilt: no emails, no device paths.
 [allowlist]
-paths = ['''^\.gitleaks\.toml$''', '''^package-lock\.json$''']
+paths = ['''^public/gallery/.*\.json$''', '''^\.gitleaks\.toml$''', '''^package-lock\.json$''']
