@@ -4,7 +4,9 @@ import {
   errorMessage,
   errorStatus,
   GATE_CODES,
+  JOB_REPORTED_CODES,
   QUOTA_CODES,
+  SANDBOX_CODES,
   type ErrorCode,
 } from '@/lib/errors';
 import {
@@ -13,7 +15,7 @@ import {
   type CapErrorCode,
   type GitHubErrorCode,
 } from '@/lib/repo/github';
-import { SANDBOX_ERROR_CODES, type SandboxErrorCode } from '@/lib/sandbox/run';
+import type { SandboxErrorCode } from '@/lib/sandbox/run';
 
 // Compile-time: a code added to a source union that errors.ts does not list fails typecheck here.
 const _github: GitHubErrorCode extends ErrorCode ? true : never = true;
@@ -57,7 +59,7 @@ describe('errorMessage', () => {
     const all = [
       ...GITHUB_ERROR_CODES,
       ...CAP_ERROR_CODES,
-      ...SANDBOX_ERROR_CODES,
+      ...SANDBOX_CODES,
       ...QUOTA_CODES,
       ...GATE_CODES,
     ];
@@ -65,6 +67,13 @@ describe('errorMessage', () => {
       expect(ERROR_CODES, code).toContain(code);
       expect(errorMessage(code).length, code).toBeGreaterThan(10);
     }
+  });
+
+  it('the job-reported codes are the Sandbox codes minus timeout, and each is a known code', () => {
+    expect([...JOB_REPORTED_CODES].sort()).toEqual(
+      SANDBOX_CODES.filter((c) => c !== 'timeout').sort(),
+    );
+    for (const code of JOB_REPORTED_CODES) expect(ERROR_CODES).toContain(code);
   });
 
   it('no message has a stack trace, internal path, drive letter or a raw value', () => {

@@ -12,6 +12,7 @@ import { pathToFileURL } from 'node:url';
 import { CAPS, MAX_ANALYSIS_BYTES } from '../caps';
 import { analyze } from '../ingest/analyze';
 import { GIT_LOG_ARGS } from '../ingest/parseLog';
+import type { JOB_REPORTED_CODES } from '../errors';
 import {
   validateBranchName,
   validateHeadSha,
@@ -21,14 +22,7 @@ import {
 
 const MAX_MAILMAP_BYTES = 1024 * 1024;
 
-export type JobErrorCode =
-  | 'bad_argument'
-  | 'too_many_files'
-  | 'clone_failed'
-  | 'stale_head'
-  | 'too_many_commits_in_window'
-  | 'invalid_output'
-  | 'internal_error';
+export type JobErrorCode = (typeof JOB_REPORTED_CODES)[number] | 'internal_error';
 
 class JobError extends Error {
   constructor(readonly code: JobErrorCode) {

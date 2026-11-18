@@ -1,5 +1,6 @@
-// No server-only imports here: the viewer UI (client bundle) uses `errorMessage`. The source modules'
-// code lists are checked against this table in tests/errors.test.ts (runtime and compile time).
+// No server-only imports here: the viewer UI (client bundle) uses `errorMessage`. The GitHub and cap
+// code lists are checked against this table in tests/errors.test.ts (runtime and compile time); the
+// Sandbox list lives here and `lib/sandbox/*` derive their types and sets from it.
 
 /** From `lib/repo/github.ts` (`GitHubErrorCode`, `CapErrorCode`). */
 export const GITHUB_CODES = [
@@ -16,7 +17,10 @@ export const CAP_CODES = [
   'too_many_files',
   'tree_truncated',
 ] as const;
-/** From `lib/sandbox/run.ts` (`SandboxErrorCode`). */
+/**
+ * The one list of Sandbox failure codes (`lib/sandbox/run.ts` derives `SandboxErrorCode` from it and
+ * `lib/sandbox/job.ts` its `JobErrorCode`). `timeout` is added by the runner; the job never reports it.
+ */
 export const SANDBOX_CODES = [
   'timeout',
   'clone_failed',
@@ -26,6 +30,10 @@ export const SANDBOX_CODES = [
   'too_many_files',
   'bad_argument',
 ] as const;
+/** The codes the Sandbox job itself may report on its stdout: every Sandbox code except the runner's `timeout`. */
+export const JOB_REPORTED_CODES = SANDBOX_CODES.filter(
+  (c): c is Exclude<(typeof SANDBOX_CODES)[number], 'timeout'> => c !== 'timeout',
+);
 /** Quota refusals from `reserveQuota` (`lib/db/limits.ts`). */
 export const QUOTA_CODES = ['daily', 'monthly'] as const;
 /** Codes the password gate and the session check return (`lib/login.ts`, `lib/session.ts`). */

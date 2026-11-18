@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { parseAnalysis } from '../analysis/schema';
 import type { Analysis } from '../analysis/types';
 import { CAPS } from '../caps';
+import { JOB_REPORTED_CODES, type SANDBOX_CODES } from '../errors';
 import {
   validateBranchName,
   validateHeadSha,
@@ -10,16 +11,8 @@ import {
   validateWindowFrom,
 } from '../repo/validate';
 
-export const SANDBOX_ERROR_CODES = [
-  'timeout',
-  'clone_failed',
-  'stale_head',
-  'invalid_output',
-  'too_many_commits_in_window',
-  'too_many_files',
-  'bad_argument',
-] as const;
-export type SandboxErrorCode = (typeof SANDBOX_ERROR_CODES)[number];
+/** The Sandbox codes (one list, in `lib/errors.ts`) plus `internal_error` for a defect on our side, such as a missing bundle. */
+export type SandboxErrorCode = (typeof SANDBOX_CODES)[number] | 'internal_error';
 
 export class SandboxError extends Error {
   constructor(readonly code: SandboxErrorCode) {
@@ -30,14 +23,7 @@ export class SandboxError extends Error {
 
 export type Phase = 'cloning' | 'reading_history' | 'computing';
 const PHASES: ReadonlySet<string> = new Set(['cloning', 'reading_history', 'computing']);
-const JOB_CODES: ReadonlySet<string> = new Set([
-  'bad_argument',
-  'too_many_files',
-  'clone_failed',
-  'stale_head',
-  'too_many_commits_in_window',
-  'invalid_output',
-]);
+const JOB_CODES: ReadonlySet<string> = new Set(JOB_REPORTED_CODES);
 
 export interface RunInput {
   owner: string;
@@ -201,7 +187,14 @@ export async function runAnalysisInSandbox(
   });
 
   const work = (async (): Promise<Outcome> => {
-    const bundle = await readBundle();
+    let bundle: Buffer;
+    try {
+      bundle = await readBundle();
+    } catch {
+      // A missing dist/sandbox-job.mjs is our deployment defect, not a failure to fetch the repo. This
+      // is still before the Sandbox exists, so the caller refunds the quota unit as before.
+      throw new SandboxError('internal_error');
+    }
     if (aborted) throw new SandboxError('timeout'); // never start creating after the deadline
     sandbox = await create({
       timeout: input.deadlineMs,

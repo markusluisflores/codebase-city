@@ -30,30 +30,30 @@ export async function handleLogin(req: Request, deps: LoginDeps): Promise<Respon
   try {
     config = assertSessionConfig(env);
   } catch {
-    return jsonError('misconfigured', 503);
+    return jsonError('misconfigured');
   }
 
   // Requiring JSON makes a cross-site form post impossible without a CORS preflight.
   if (!(req.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) {
-    return jsonError('unsupported_media_type', 415);
+    return jsonError('unsupported_media_type');
   }
   const declared = Number(req.headers.get('content-length') ?? '0');
-  if (declared > MAX_BODY_CHARS) return jsonError('invalid_body', 400);
+  if (declared > MAX_BODY_CHARS) return jsonError('invalid_body');
   const text = await req.text();
-  if (text.length > MAX_BODY_CHARS) return jsonError('invalid_body', 400);
+  if (text.length > MAX_BODY_CHARS) return jsonError('invalid_body');
 
   let password: unknown;
   try {
     password = (JSON.parse(text) as { password?: unknown } | null)?.password;
   } catch {
-    return jsonError('invalid_body', 400);
+    return jsonError('invalid_body');
   }
   if (
     typeof password !== 'string' ||
     password.length === 0 ||
     password.length > MAX_PASSWORD_LENGTH
   ) {
-    return jsonError('invalid_body', 400);
+    return jsonError('invalid_body');
   }
 
   const ip = clientIp(req.headers);
@@ -63,14 +63,14 @@ export async function handleLogin(req: Request, deps: LoginDeps): Promise<Respon
     // the limit, and a store whose write fails denies before any comparison happens.
     await deps.store.recordFailedLogin(ip, now());
     if (await deps.store.tooManyAttempts(ip, now())) {
-      return jsonError('too_many_attempts', 429, { 'retry-after': '60' });
+      return jsonError('too_many_attempts', { 'retry-after': '60' });
     }
     if (!(await passwordMatches(config.secret, password, config.demoPassword))) {
-      return jsonError('wrong_password', 401);
+      return jsonError('wrong_password');
     }
   } catch {
     // The limiter is part of the gate: if it cannot be consulted, nobody gets in.
-    return jsonError('unavailable', 503);
+    return jsonError('unavailable');
   }
 
   return new Response(null, {

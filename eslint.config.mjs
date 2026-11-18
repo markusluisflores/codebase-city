@@ -9,6 +9,7 @@ export default defineConfig([
     '.next/**',
     'dist/**',
     'node_modules/**',
+    '.claude/**',
     'spikes/**',
     'coverage/**',
     'next-env.d.ts',
