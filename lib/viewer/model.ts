@@ -10,6 +10,22 @@ export function districtTooltip(badge: { ownerName: string; share: number }): st
   return `single owner: ${badge.ownerName} (${percent(badge.share)})`;
 }
 
+/**
+ * The 2D hover text for a file: its path, plus the single-owner line of the deepest flagged district
+ * that contains it (the treemap's hit test is per file, so a district has no hover target of its own).
+ */
+export function treemapTooltip(
+  path: string,
+  badges: ReadonlyMap<string, { ownerName: string; share: number }>,
+): string {
+  const parts = path.split('/');
+  for (let depth = parts.length - 1; depth >= 1; depth--) {
+    const badge = badges.get(parts.slice(0, depth).join('/'));
+    if (badge) return `${path} (${districtTooltip(badge)})`;
+  }
+  return path;
+}
+
 /** Unix seconds as a UTC date, `yyyy-mm-dd`. */
 export function formatDay(unixSeconds: number): string {
   return new Date(unixSeconds * 1000).toISOString().slice(0, 10);
