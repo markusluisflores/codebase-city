@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { POST as analyzePost } from '@/app/api/analyze/route';
 import { POST as sessionPost } from '@/app/api/session/route';
+import { errorMessage, errorStatus, GATE_CODES, type ErrorCode } from '@/lib/errors';
 import { handleLogin } from '@/lib/login';
 import { config as proxyConfig, proxy } from '@/proxy';
 import { createSessionToken, SESSION_COOKIE, SESSION_MAX_AGE_S } from '@/lib/session';
@@ -56,7 +57,61 @@ describe('login handler', () => {
     });
     expect(res.status).toBe(401);
     expect(res.headers.get('set-cookie')).toBeNull();
-    expect(await res.json()).toEqual({ error: 'wrong_password' });
+    expect(await res.json()).toEqual({
+      error: 'wrong_password',
+      message: errorMessage('wrong_password'),
+    });
+  });
+
+  it('every gate and login error body is {error, message} with the fixed message and status', async () => {
+    const throwing = {
+      recordFailedLogin: async () => Promise.reject(new Error('db down at host-internal')),
+      tooManyAttempts: async () => false,
+    };
+    const seen = new Map<string, Response>();
+    seen.set(
+      'misconfigured',
+      await handleLogin(loginReq({ password: 'x' }), { store: fakeLoginAttempts(), env: {} }),
+    );
+    seen.set(
+      'unsupported_media_type',
+      await handleLogin(
+        new Request('http://localhost/api/session', {
+          method: 'POST',
+          body: '{}',
+          headers: { 'content-type': 'text/plain' },
+        }),
+        { store: fakeLoginAttempts(), env },
+      ),
+    );
+    seen.set(
+      'invalid_body',
+      await handleLogin(loginReq({ nope: 1 }), { store: fakeLoginAttempts(), env }),
+    );
+    seen.set(
+      'wrong_password',
+      await handleLogin(loginReq({ password: 'nope' }), { store: fakeLoginAttempts(), env }),
+    );
+    seen.set(
+      'unavailable',
+      await handleLogin(loginReq({ password: 'x' }), { store: throwing, env }),
+    );
+    const limited = fakeLoginAttempts();
+    for (let i = 0; i < 6; i++)
+      seen.set(
+        'too_many_attempts',
+        await handleLogin(loginReq({ password: 'x' }), { store: limited, env }),
+      );
+    seen.set(
+      'unauthorized',
+      await proxy(new NextRequest('http://localhost/api/analyze', { method: 'POST' })),
+    );
+    // Every GATE code is exercised above, so a new one cannot be added without a body-shape check.
+    for (const code of GATE_CODES) expect(seen.has(code), code).toBe(true);
+    for (const [code, res] of seen) {
+      expect(res.status, code).toBe(errorStatus(code as ErrorCode));
+      expect(await res.json(), code).toEqual({ error: code, message: errorMessage(code) });
+    }
   });
 
   it('gives the same response for a near miss and a far miss', async () => {
@@ -115,7 +170,10 @@ describe('login handler', () => {
     expect(blocked.status).toBe(429);
     expect(blocked.headers.get('retry-after')).toBe('60');
     expect(blocked.headers.get('set-cookie')).toBeNull();
-    expect(await blocked.json()).toEqual({ error: 'too_many_attempts' });
+    expect(await blocked.json()).toEqual({
+      error: 'too_many_attempts',
+      message: errorMessage('too_many_attempts'),
+    });
     // Every attempt is recorded before the compare, the blocked one included.
     expect(store.failures.get('203.0.113.9')).toHaveLength(6);
     const later = new Date(t0.getTime() + 61_000);
@@ -280,7 +338,10 @@ describe('proxy.ts gate', () => {
   it('answers 401 JSON to POST /api/analyze without a session', async () => {
     const res = await proxy(req('/api/analyze'));
     expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: 'unauthorized' });
+    expect(await res.json()).toEqual({
+      error: 'unauthorized',
+      message: errorMessage('unauthorized'),
+    });
   });
 
   it('lets a valid session through', async () => {
@@ -299,6 +360,8 @@ describe('proxy.ts gate', () => {
     '/api/%61nalyze',
     '/api/%41NALYZE',
     '/api/%2561nalyze',
+    '/api/%252561nalyze',
+    '/api/%25252561nalyze',
     '/api/analyze%2F',
     '/api/analyze/extra',
     '/api/./analyze',

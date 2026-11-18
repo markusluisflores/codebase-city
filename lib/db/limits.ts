@@ -120,6 +120,3 @@ export function createLoginAttemptStore(getSecret: () => string | undefined): Lo
 export const postgresLoginAttempts: LoginAttemptStore = createLoginAttemptStore(
   () => process.env.SESSION_SECRET,
 );
-
-export const recordFailedLogin = postgresLoginAttempts.recordFailedLogin;
-export const tooManyAttempts = postgresLoginAttempts.tooManyAttempts;

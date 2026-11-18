@@ -1,8 +1,8 @@
 /**
- * Login-attempt store. Task 12a implements this against Postgres (`login_attempts`), storing only
+ * Login-attempt store. `lib/db/limits.ts` implements it against Postgres (`login_attempts`), storing only
  * HMAC(SESSION_SECRET, "login-ip:" + ip), never the raw IP, and purging rows older than 1 hour.
  *
- * Semantics Task 12a must follow (they close a parallel-burst race, so do not change them):
+ * Semantics any implementation must follow (they close a parallel-burst race, so do not change them):
  * - `handleLogin` calls `recordFailedLogin(ip, now)` for EVERY attempt, before comparing the password
  *   (the name is the plan's; it records an attempt, whether or not the password turns out right).
  * - It then calls `tooManyAttempts(ip, now)`, true when MORE than 5 attempts (including this one) were
