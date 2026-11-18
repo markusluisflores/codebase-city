@@ -1,0 +1,172 @@
+/* Loading, error, empty and analyse-form states. Tokens come from app/globals.css. */
+.error {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding: 12px 14px;
+  max-width: 34em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+}
+
+.error p {
+  margin: 0;
+}
+
+.button {
+  font: inherit;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--accent);
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.note {
+  margin: 0;
+  padding: 6px 10px;
+  max-width: min(340px, 60vw);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Skeleton: a grey grid that pulses; the pulse stops under reduced motion (globals.css). */
+.skeleton {
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr) 310px;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100dvh;
+}
+
+.skelBar,
+.skelSide,
+.skelCanvas {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.skelBar {
+  grid-column: 1 / -1;
+  height: 48px;
+}
+
+.skelCanvas {
+  background: var(--bg);
+  display: grid;
+  place-content: center;
+  color: var(--muted);
+}
+
+.pulse {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.empty {
+  display: grid;
+  gap: 6px;
+  padding: 28px 20px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+}
+
+.empty strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Analyse form */
+.form {
+  display: grid;
+  gap: 10px;
+  max-width: 34em;
+  margin: 0 0 48px;
+}
+
+.form label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
+
+.row input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+}
+
+.phases {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.phases li[data-state='done']::before {
+  content: '✓ ';
+  color: var(--accent);
+}
+
+.phases li[data-state='current'] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.phases li[data-state='current']::before {
+  content: '▸ ';
+  color: var(--accent);
+}
+
+.phases li[data-state='todo']::before {
+  content: '· ';
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .skeleton {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .skelSide {
+    display: none;
+  }
+}

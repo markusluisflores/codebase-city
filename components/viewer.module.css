@@ -1,0 +1,487 @@
+/* Viewer layout A: full-bleed canvas, left report card, right details, top bar. Tokens come from
+   app/globals.css. On phones the panels become a bottom sheet over a full-screen canvas. */
+.shell {
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr) 310px;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    'bar bar bar'
+    'left canvas right';
+  height: 100dvh;
+}
+
+.bar {
+  grid-area: bar;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.repo {
+  margin: 0;
+  font:
+    500 15px var(--font-mono),
+    ui-monospace,
+    monospace;
+}
+
+.analysed {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.toggle button,
+.sheetButton,
+.link,
+.entry {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.toggle button {
+  padding: 4px 14px;
+  color: var(--muted);
+}
+
+.toggle button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.canvas {
+  grid-area: canvas;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+
+.canvas > .fill {
+  position: absolute;
+  inset: 0;
+}
+
+.overlay {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.overlay > * {
+  pointer-events: auto;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.picker select {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+.notice {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  margin: 0;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* The two asides sit in the grid on desktop and in one sheet on phones. */
+.panels {
+  display: contents;
+}
+
+.left,
+.right {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  background: var(--surface);
+}
+
+.left {
+  grid-area: left;
+  border-right: 1px solid var(--border);
+}
+
+.right {
+  grid-area: right;
+  border-left: 1px solid var(--border);
+}
+
+.sheetButton {
+  display: none;
+}
+
+.panelTitle {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.group {
+  margin-bottom: 18px;
+}
+
+.group h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.hint {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: rank;
+}
+
+.list li {
+  counter-increment: rank;
+  display: flex;
+  gap: 6px;
+}
+
+.list li::before {
+  content: counter(rank);
+  flex: none;
+  width: 1.4em;
+  padding-top: 3px;
+  text-align: right;
+  font:
+    12px var(--font-mono),
+    ui-monospace,
+    monospace;
+  color: var(--muted);
+}
+
+.entry {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  text-align: left;
+  border-radius: 4px;
+  font:
+    13px var(--font-mono),
+    ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+}
+
+.entry:hover,
+.entry[aria-pressed='true'] {
+  background: var(--bg);
+}
+
+.entry[aria-pressed='true'] {
+  box-shadow: inset 2px 0 var(--accent);
+}
+
+.dir {
+  color: var(--muted);
+}
+
+.facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 14px;
+}
+
+.facts dt {
+  color: var(--muted);
+}
+
+.facts dd {
+  margin: 0;
+  text-align: right;
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.path {
+  margin: 0 0 12px;
+  font:
+    500 14px var(--font-mono),
+    ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+}
+
+.link {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.cochange {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font:
+    12px var(--font-mono),
+    ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+}
+
+/* Search */
+.search {
+  position: relative;
+  width: min(280px, 36vw);
+}
+
+.search input {
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+
+.results {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 5;
+  width: min(420px, 92vw);
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font:
+    13px var(--font-mono),
+    ui-monospace,
+    monospace;
+}
+
+.results li {
+  padding: 5px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.results li[aria-selected='true'] {
+  background: var(--bg);
+  box-shadow: inset 2px 0 var(--accent);
+}
+
+.empty {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Legend */
+.legend {
+  max-width: min(340px, 60vw);
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.legend h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.stops {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+.stops li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatch {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+}
+
+.legend p {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.state {
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  height: 100dvh;
+  padding: 24px;
+  text-align: center;
+}
+
+.state a {
+  color: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'bar'
+      'canvas';
+  }
+
+  .analysed {
+    display: none;
+  }
+
+  .spacer {
+    display: none;
+  }
+
+  .bar {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  .search {
+    width: 100%;
+    order: 5;
+  }
+
+  .results {
+    left: 0;
+    right: auto;
+  }
+
+  .panels {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    max-height: 60dvh;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-radius: 12px 12px 0 0;
+  }
+
+  .sheetButton {
+    display: block;
+    padding: 12px;
+    text-align: center;
+    font-weight: 500;
+  }
+
+  .panels[data-open='false'] > .left,
+  .panels[data-open='false'] > .right {
+    display: none;
+  }
+
+  .left,
+  .right {
+    border: 0;
+    flex: none;
+    max-height: 30dvh;
+  }
+
+  .overlay {
+    bottom: 56px;
+  }
+}
+
+.stack {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.sheetButton:focus-visible,
+.entry:focus-visible,
+.toggle button:focus-visible,
+.link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.canvas:focus {
+  outline: none;
+}

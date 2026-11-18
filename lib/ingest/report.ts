@@ -19,7 +19,7 @@ export const IGNORED_FOR_REPORT: RegExp[] = [
   /\.(png|jpe?g|gif|svg|webp|ico|bmp|avif)$/i,
 ];
 
-function isIgnored(path: string): boolean {
+export function isIgnored(path: string): boolean {
   return IGNORED_FOR_REPORT.some((re) => re.test(path));
 }
 

@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parseAnalysis, SCHEMA_VERSION } from '@/lib/analysis/schema';
 import type { Analysis } from '@/lib/analysis/types';
+import { galleryCard, type GalleryCard } from '@/lib/gallery-cards';
 import { isGitHubOwner } from '@/lib/repo/url';
 import { validateOwnerName } from '@/lib/repo/validate';
 
@@ -32,4 +33,29 @@ export async function readGallery(
   } catch {
     return null;
   }
+}
+
+/**
+ * One card per analysis in the gallery directory, sorted by repo name. A missing directory or an
+ * unreadable, invalid or out-of-date file is skipped (the home page then shows what it can).
+ */
+export async function listGalleryCards(dir: string = GALLERY_DIR): Promise<GalleryCard[]> {
+  let names: string[];
+  try {
+    names = (await readdir(/*turbopackIgnore: true*/ dir)).filter((f) => f.endsWith('.json'));
+  } catch {
+    return [];
+  }
+  const cards: GalleryCard[] = [];
+  for (const file of names.sort()) {
+    try {
+      const analysis = parseAnalysis(
+        JSON.parse(await readFile(join(/*turbopackIgnore: true*/ dir, file), 'utf8')),
+      );
+      if (analysis.schemaVersion === SCHEMA_VERSION) cards.push(galleryCard(analysis));
+    } catch {
+      // Skip a bad file rather than break the home page.
+    }
+  }
+  return cards.sort((a, b) => `${a.name}/${a.owner}`.localeCompare(`${b.name}/${b.owner}`));
 }
