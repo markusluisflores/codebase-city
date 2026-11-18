@@ -17,9 +17,11 @@ Nothing yet. The plan: paste a public GitHub repo URL and get a 3D city plus a 2
 | ----- | ------ | ------ |
 | Hosting | Vercel (ADR-001) | Decided 2026-11-13 |
 | Git analysis | Plain TypeScript module, run inside a Vercel Sandbox | Planned; Sandbox spike passed 2026-11-14 |
-| Database / cache | Postgres via a Vercel Marketplace partner (for example Neon) | Planned, not chosen |
+| Database / cache | Postgres via a Vercel Marketplace partner; Neon (see the note below the table) | Neon chosen as lowest-effort option, 2026-11-17 |
 | Front end | Next.js with Three.js and a 2D treemap | Decided in the design (2026-11-13) |
 | Access model | Public gallery of cached cities; adding a new repo is password-protected | Decided 2026-11-13 (Markus: "make it public, while the adding of repos password protected"); tier is Standard (confirmed by Markus 2026-11-13), with a security review on the ingestion boundary and the gate |
+
+Neon: Postgres was the requirement; Neon was the lowest-effort Vercel Marketplace option and, being plain Postgres, is portable by changing DATABASE_URL; no written comparison against other providers.
 
 ---
 
