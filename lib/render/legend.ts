@@ -64,7 +64,7 @@ export function legendFor(mode: ColourMode, names: LegendNames = {}): Legend {
           ]),
           NO_ACTIVITY,
         ],
-        note: "Heuristic: the number of commits that touched the file in the analysis window; renames split a file's history.",
+        note: 'Heuristic: the number of commits that touched the file in the analysis window.',
       };
     case 'age':
       return {
