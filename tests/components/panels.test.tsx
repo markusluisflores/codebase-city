@@ -147,3 +147,36 @@ describe('SearchBox', () => {
     expect(screen.getByText(/no files match/i)).toBeTruthy();
   });
 });
+
+describe('keyboard use', () => {
+  it('search: type, arrow to a result and press Enter to select it', async () => {
+    const onSelect = vi.fn();
+    render(<SearchBox paths={['src/a.ts', 'src/b.ts', 'docs/a.md']} onSelect={onSelect} />);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(screen.getByRole('combobox'));
+    await userEvent.keyboard('src');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    expect(onSelect).toHaveBeenCalledWith('src/b.ts');
+  });
+
+  it('search: Enter with no list open selects nothing', async () => {
+    const onSelect = vi.fn();
+    render(<SearchBox paths={['src/a.ts']} onSelect={onSelect} />);
+    await userEvent.tab();
+    await userEvent.keyboard('{Enter}');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('report card: entries are tabbable buttons and Enter or Space selects', async () => {
+    const onSelect = vi.fn();
+    const report = { readFirst: ['src/a.ts', 'src/b.ts'], riskiest: [], forgotten: [] };
+    render(<ReportCard report={report} selectedPath={null} onSelect={onSelect} />);
+    await userEvent.tab();
+    expect(document.activeElement?.getAttribute('data-path')).toBe('src/a.ts');
+    await userEvent.keyboard('{Enter}');
+    expect(onSelect).toHaveBeenLastCalledWith('src/a.ts');
+    await userEvent.tab();
+    await userEvent.keyboard(' ');
+    expect(onSelect).toHaveBeenLastCalledWith('src/b.ts');
+  });
+});

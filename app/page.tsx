@@ -1,3 +1,4 @@
+import { AnalyseForm } from '@/components/AnalyseForm';
 import { GalleryGrid } from '@/components/GalleryGrid';
 import s from '@/components/gallery.module.css';
 import { listGalleryCards } from '@/lib/gallery';
@@ -6,13 +7,13 @@ import { listGalleryCards } from '@/lib/gallery';
 export default async function Home() {
   const cards = await listGalleryCards();
   return (
-    <main className={s.page}>
+    <main id="main" tabIndex={-1} className={s.page}>
       <section className={s.hero}>
         <h1>
           Codebase <span>City</span>
         </h1>
         <p>See any repo as a city. Find the files to read first.</p>
-        {/* Task 15b: the gated analyse form goes here, between the hero text and the gallery. */}
+        <AnalyseForm />
       </section>
       <section aria-labelledby="gallery-heading">
         <h2 id="gallery-heading" className={s.heading}>

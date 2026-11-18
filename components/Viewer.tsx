@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { canUseWebGL } from '@/lib/a11y';
 import type { Analysis } from '@/lib/analysis/types';
 import { cityLayout } from '@/lib/layout/city';
+import { arcsFor } from '@/lib/render/arcs';
 import {
   COLD,
   COLOUR_MODES,
@@ -18,8 +20,10 @@ import { DetailsPanel } from './DetailsPanel';
 import { Legend } from './Legend';
 import { ReportCard } from './ReportCard';
 import { SearchBox } from './SearchBox';
+import { ThinHistoryNote } from './ThinHistoryNote';
 import { TreemapView } from './TreemapView';
 import s from './viewer.module.css';
+import st from './states.module.css';
 
 export interface ViewerProps {
   analysis: Analysis;
@@ -46,8 +50,16 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
   const [view, setView] = useState<View>('3d');
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [noWebGL, setNoWebGL] = useState(false);
+  // Checked once, up front: the viewer only renders in the browser (after the analysis loads).
+  const [noWebGL, setNoWebGL] = useState(() => !canUseWebGL());
   const city = useRef<CityCanvasHandle>(null);
+  const main = useRef<HTMLElement>(null);
+  const sheetButton = useRef<HTMLButtonElement>(null);
+
+  // A route change lands on the main region, so keyboard and screen-reader users start in the content.
+  useEffect(() => {
+    main.current?.focus({ preventScroll: true });
+  }, []);
 
   const byPath = useMemo(() => new Map(files.map((f) => [f.path, f] as const)), [files]);
   const paths = useMemo(() => files.map((f) => f.path), [files]);
@@ -64,6 +76,9 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
     },
     [byPath, mode, ctx],
   );
+  const selectedFile = selectedPath === null ? null : (byPath.get(selectedPath) ?? null);
+  // Arcs for the selected file only; none when nothing is selected.
+  const arcs = useMemo(() => arcsFor(selectedFile, layout), [selectedFile, layout]);
   const colours = useMemo(() => layout.buildings.map((b) => colourOf(b.path)), [layout, colourOf]);
 
   const select = useCallback((path: string) => {
@@ -119,8 +134,23 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
         <SearchBox paths={paths} onSelect={select} />
       </header>
 
-      <div className={s.panels} data-open={sheetOpen}>
+      <p className={st.sr} role="status" aria-live="polite">
+        {selectedPath === null ? '' : `Selected ${selectedPath}`}
+      </p>
+
+      <div
+        className={s.panels}
+        data-open={sheetOpen}
+        onKeyDown={(e) => {
+          // Escape closes the phone sheet and hands focus back to the button that opens it.
+          if (e.key === 'Escape' && sheetOpen) {
+            setSheetOpen(false);
+            sheetButton.current?.focus();
+          }
+        }}
+      >
         <button
+          ref={sheetButton}
           type="button"
           className={s.sheetButton}
           aria-expanded={sheetOpen}
@@ -130,7 +160,7 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
         </button>
         <ReportCard report={report} selectedPath={selectedPath} onSelect={select} />
         <DetailsPanel
-          file={selectedPath === null ? null : (byPath.get(selectedPath) ?? null)}
+          file={selectedFile}
           selectedPath={selectedPath}
           repo={repo}
           headSha={repo.headSha}
@@ -138,7 +168,7 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
         />
       </div>
 
-      <main className={s.canvas}>
+      <main id="main" ref={main} tabIndex={-1} className={s.canvas}>
         <div className={s.fill}>
           {effectiveView === '3d' ? (
             <CityCanvas
@@ -146,6 +176,7 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
               layout={layout}
               colours={colours}
               selectedPath={selectedPath}
+              arcs={arcs}
               badgedDistricts={badged}
               onSelect={onCitySelect}
               tooltipText={cityTooltip}
@@ -163,7 +194,8 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
         </div>
         {noWebGL ? (
           <p className={s.notice} role="status">
-            3D is not available in this browser, so the 2D treemap is shown.
+            3D needs WebGL, which this browser has turned off or does not support, so the 2D treemap
+            is shown instead.
           </p>
         ) : null}
         <div className={s.overlay}>
@@ -177,7 +209,10 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
               ))}
             </select>
           </label>
-          <Legend mode={mode} ctx={ctx} stats={stats} />
+          <div className={s.stack}>
+            <ThinHistoryNote thin={stats.thinHistory} mode={mode} commits={win.commits} />
+            <Legend mode={mode} ctx={ctx} stats={stats} />
+          </div>
         </div>
       </main>
     </div>

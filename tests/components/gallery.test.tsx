@@ -39,6 +39,6 @@ describe('GalleryGrid', () => {
 
   it('shows the empty state when there are no cards', () => {
     render(<GalleryGrid cards={[]} />);
-    expect(screen.getByText('No repos yet. Analyse one above.')).toBeTruthy();
+    expect(screen.getByText(/no repos in the gallery yet/i)).toBeTruthy();
   });
 });

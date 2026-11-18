@@ -2,6 +2,7 @@
 
 import { useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
 import type { CityLayout } from '@/lib/layout/city';
+import type { Arc } from '@/lib/render/arcs';
 import { FrameStats, type FrameSummary } from '@/lib/render/frameStats';
 import { createCityScene, type CityScene, type SceneHit } from '@/lib/render/scene';
 import { Tooltip } from './Tooltip';
@@ -21,6 +22,8 @@ export interface CityCanvasProps {
   /** One hex colour per `layout.buildings` entry, same order. */
   colours: readonly string[];
   selectedPath?: string | null;
+  /** Co-change arcs to draw: the selected file's only, none when nothing is selected. Memoise it. */
+  arcs?: readonly Arc[];
   /** Districts to outline (single-owner). */
   badgedDistricts?: ReadonlySet<string>;
   /** `null` when empty ground is clicked. */
@@ -43,6 +46,7 @@ export function CityCanvas({
   layout,
   colours,
   selectedPath = null,
+  arcs,
   badgedDistricts,
   onSelect,
   tooltipText,
@@ -131,6 +135,10 @@ export function CityCanvas({
   useEffect(() => {
     sceneRef.current?.setBadgedDistricts(badgedDistricts ?? new Set());
   }, [badgedDistricts, layout]);
+
+  useEffect(() => {
+    sceneRef.current?.setArcs(arcs ?? []);
+  }, [arcs, layout]);
 
   useEffect(() => {
     const i = selectedPath === null ? undefined : indexByPath.get(selectedPath);

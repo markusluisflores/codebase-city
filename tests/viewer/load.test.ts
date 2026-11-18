@@ -45,7 +45,7 @@ describe('loadAnalysis', () => {
     const bad = () => json({ hello: 1 });
     expect(await loadAnalysis('a', 'b', bad)).toMatchObject({
       kind: 'error',
-      code: 'bad_response',
+      code: 'unreadable',
     });
   });
 });

@@ -1,6 +1,9 @@
 import type { Analysis } from '@/lib/analysis/types';
 
-/** What the viewer page is showing. Task 15b adds the loading skeleton and the retry UI on these. */
+/**
+ * What the viewer page is showing. `code` is an API error code, or one of two client-side codes:
+ * `network` (no reply) and `unreadable` (a reply that was not the expected JSON). `ErrorState` shows each.
+ */
 export type ViewerState =
   | { kind: 'loading' }
   | { kind: 'ready'; analysis: Analysis; source: 'gallery' | 'live'; analysedAt: string | null }
@@ -63,17 +66,17 @@ export async function loadAnalysis(
   try {
     body = await res.json();
   } catch {
-    return { kind: 'error', code: 'bad_response', message: 'The server sent an unreadable reply.' };
+    return { kind: 'error', code: 'unreadable', message: 'The server sent an unreadable reply.' };
   }
   if (!res.ok) {
-    const code = isObject(body) && typeof body.error === 'string' ? body.error : 'bad_response';
+    const code = isObject(body) && typeof body.error === 'string' ? body.error : 'unreadable';
     if (res.status === 404 && code === 'analysis_not_found') return { kind: 'notFound' };
     const message =
       isObject(body) && typeof body.message === 'string' ? body.message : 'Something went wrong.';
     return { kind: 'error', code, message };
   }
   if (!isEnvelope(body)) {
-    return { kind: 'error', code: 'bad_response', message: 'The server sent an unexpected reply.' };
+    return { kind: 'error', code: 'unreadable', message: 'The server sent an unexpected reply.' };
   }
   return {
     kind: 'ready',

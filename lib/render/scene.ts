@@ -20,6 +20,8 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { CityBuilding, CityDistrict, CityLayout } from '@/lib/layout/city';
+import { flyToMode } from '@/lib/a11y';
+import { arcSegments, type Arc } from './arcs';
 import { TOKENS } from './colours';
 import { buildingMatrices, cityRadius, plateMatrices } from './instances';
 
@@ -43,6 +45,8 @@ export interface CityScene {
   setColours(colours: readonly string[]): void;
   /** Outlines the given district paths (single-owner districts). */
   setBadgedDistricts(paths: ReadonlySet<string>): void;
+  /** Draws co-change arcs (an empty array clears them). The caller passes arcs for the selected file only. */
+  setArcs(arcs: readonly Arc[]): void;
   /** Highlights a building, or none with `null`. */
   setSelected(index: number | null): void;
   /** Moves the camera to frame a building: animated, or an instant jump under reduced motion. */
@@ -55,6 +59,8 @@ export interface CityScene {
 }
 
 const FLY_MS = 650;
+/** Sky blue: apart from every stop of the ember ramp, so an arc reads against any colour mode. */
+const ARC_COLOUR = '#7dd3fc';
 const CLICK_SLOP_PX = 5;
 
 const easeInOut = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
@@ -93,6 +99,7 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
   const buildingMaterial = new MeshLambertMaterial({ color: 0xffffff });
   const plateMaterial = new MeshLambertMaterial({ color: new Color(TOKENS.surface) });
   const outlineMaterial = new LineBasicMaterial({ color: new Color(TOKENS.accent) });
+  const arcMaterial = new LineBasicMaterial({ color: new Color(ARC_COLOUR) });
   const selectionEdges = new EdgesGeometry(unitBox);
   const selectionMaterial = new LineBasicMaterial({ color: new Color('#ffffff') });
   const selection = new LineSegments(selectionEdges, selectionMaterial);
@@ -103,6 +110,7 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
   let buildings: InstancedMesh | null = null;
   let plates: InstancedMesh | null = null;
   let outlines: LineSegments | null = null;
+  let arcLines: LineSegments | null = null;
   let selected: number | null = null;
   let radius = 1;
 
@@ -264,6 +272,8 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
       removeMesh(buildings);
       removeMesh(plates);
       removeMesh(outlines);
+      removeMesh(arcLines);
+      arcLines = null;
       buildings = null;
       plates = null;
       outlines = null;
@@ -341,6 +351,20 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
       scene.add(outlines);
       dirty = true;
     },
+    setArcs(arcs) {
+      removeMesh(arcLines);
+      arcLines = null;
+      if (arcs.length > 0) {
+        const verts: number[] = [];
+        for (const arc of arcs) verts.push(...arcSegments(arc));
+        const g = new BufferGeometry();
+        g.setAttribute('position', new Float32BufferAttribute(verts, 3));
+        arcLines = new LineSegments(g, arcMaterial);
+        arcLines.frustumCulled = false;
+        scene.add(arcLines);
+      }
+      dirty = true;
+    },
     setSelected(index) {
       selected = index;
       placeSelection();
@@ -357,7 +381,7 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
         Math.max(controls.minDistance, b.footprint * 12, 8),
       );
       const toPos = toTarget.clone().add(dir.normalize().multiplyScalar(distance));
-      if (reducedMotion()) {
+      if (flyToMode(reducedMotion()) === 'jump') {
         camera.position.copy(toPos);
         controls.target.copy(toTarget);
         controls.update();
@@ -398,6 +422,7 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
       removeMesh(buildings);
       removeMesh(plates);
       removeMesh(outlines);
+      removeMesh(arcLines);
       scene.remove(selection);
       unitBox.dispose();
       buildingGeometry.dispose();
@@ -405,6 +430,7 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
       buildingMaterial.dispose();
       plateMaterial.dispose();
       outlineMaterial.dispose();
+      arcMaterial.dispose();
       selectionMaterial.dispose();
       // No forceContextLoss(): React may re-run the mount effect on the same canvas (Strict Mode), and a
       // lost context cannot be reused. dispose() frees the GPU resources; the canvas goes with its element.

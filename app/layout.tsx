@@ -25,7 +25,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`${sans.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <a href="#main" className="skip">
+          Skip to main content
+        </a>
+        {children}
+      </body>
     </html>
   );
 }

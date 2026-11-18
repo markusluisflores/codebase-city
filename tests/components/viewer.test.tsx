@@ -9,6 +9,13 @@ import { Viewer } from '@/components/Viewer';
 import { ViewerLoader } from '@/components/ViewerLoader';
 import { viewerAnalysis } from '../helpers/viewerFixture';
 
+const webgl = vi.hoisted(() => ({ ok: true }));
+vi.mock('@/lib/a11y', async (orig) => ({
+  ...(await orig<typeof import('@/lib/a11y')>()),
+  canUseWebGL: () => webgl.ok,
+}));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
 const flyToPath = vi.fn();
 let cityProps: CityCanvasProps | null = null;
 let treemapProps: TreemapViewProps | null = null;
@@ -31,6 +38,7 @@ beforeEach(() => {
   cityProps = null;
   treemapProps = null;
   flyToPath.mockClear();
+  webgl.ok = true;
 });
 afterEach(() => {
   cleanup();
@@ -148,7 +156,11 @@ describe('ViewerLoader', () => {
     );
     render(<ViewerLoader owner="octo" repo="repo" />);
     await waitFor(() => expect(screen.getByText(/not analysed yet/i)).toBeTruthy());
-    expect(screen.getByRole('link', { name: /analyse/i }).getAttribute('href')).toBe('/');
+    expect(screen.getByRole('link', { name: /gallery/i }).getAttribute('href')).toBe('/');
+    // The uncached repo offers the analyse form, prefilled.
+    expect((screen.getByLabelText(/github repository/i) as HTMLInputElement).value).toBe(
+      'octo/repo',
+    );
   });
 
   it('shows a loading status first, and an error message on failure', async () => {
@@ -156,5 +168,89 @@ describe('ViewerLoader', () => {
     render(<ViewerLoader owner="octo" repo="repo" />);
     expect(screen.getByRole('status')).toBeTruthy();
     await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+  });
+});
+
+describe('Viewer: arcs, states and accessibility', () => {
+  it('draws arcs for the selected file only, and none when nothing is selected', () => {
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    expect(cityProps?.arcs).toEqual([]);
+    act(() => cityProps?.onSelect?.({ kind: 'building', path: 'src/a.ts' }));
+    expect(cityProps?.arcs).toHaveLength(1);
+    expect(cityProps?.arcs?.[0]?.path).toBe('src/b.ts');
+    // docs/readme.md has the fixture's one partner (src/b.ts) too; a file with none gets none.
+    act(() => cityProps?.onSelect?.({ kind: 'building', path: 'docs/old file #1.md' }));
+    expect(cityProps?.arcs).toEqual([]);
+    act(() => cityProps?.onSelect?.(null));
+    expect(cityProps?.arcs).toEqual([]);
+  });
+
+  it('shows the thin-history note in every history-based mode, and not in language mode', async () => {
+    render(
+      <Viewer analysis={viewerAnalysis({ thinHistory: true })} source="live" analysedAt={null} />,
+    );
+    for (const mode of ['hotspot', 'churn', 'age', 'bugfix', 'ownership']) {
+      await userEvent.selectOptions(screen.getByLabelText(/colour by/i), mode);
+      expect(screen.getByText(/thin history/i)).toBeTruthy();
+    }
+    await userEvent.selectOptions(screen.getByLabelText(/colour by/i), 'language');
+    expect(screen.queryByText(/thin history/i)).toBeNull();
+  });
+
+  it('has no thin-history note for a repo with enough commits', () => {
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    expect(screen.queryByText(/thin history/i)).toBeNull();
+  });
+
+  it('without WebGL shows the 2D treemap and an explanation, and disables the 3D button', () => {
+    webgl.ok = false;
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    expect(screen.getByTestId('treemap')).toBeTruthy();
+    expect(screen.queryByTestId('city')).toBeNull();
+    expect(screen.getByText(/needs WebGL/i)).toBeTruthy();
+    expect((screen.getByRole('button', { name: '3D' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('announces the selection politely', () => {
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    act(() => cityProps?.onSelect?.({ kind: 'building', path: 'src/a.ts' }));
+    expect(screen.getByText('Selected src/a.ts').getAttribute('aria-live')).toBe('polite');
+  });
+
+  it('Escape closes the details sheet and returns focus to its button', async () => {
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    const button = screen.getByRole('button', { name: /report card and details/i });
+    await userEvent.click(button); // opens
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+    const entry = document.querySelector('button[data-path="src/a.ts"]') as HTMLButtonElement;
+    entry.focus();
+    await userEvent.keyboard('{Escape}');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('moves focus to the main region on mount, and has a heading hierarchy from h1', () => {
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    expect(document.activeElement).toBe(screen.getByRole('main'));
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getByRole('main').id).toBe('main');
+  });
+
+  it('repo-derived strings render as text, never as elements', () => {
+    const evil = '<img src=x onerror=alert(1)>';
+    const base = viewerAnalysis();
+    const hostile = {
+      ...base,
+      files: base.files.map((f, i) =>
+        i === 0
+          ? { ...f, path: evil, mainAuthor: evil, coChange: [{ path: evil, shared: 1, score: 1 }] }
+          : f,
+      ),
+      report: { ...base.report, readFirst: [evil] },
+    };
+    const { container } = render(<Viewer analysis={hostile} source="live" analysedAt={null} />);
+    act(() => cityProps?.onSelect?.({ kind: 'building', path: evil }));
+    expect(container.querySelector('img')).toBeNull();
+    expect(screen.getAllByText(evil, { exact: false }).length).toBeGreaterThan(0);
   });
 });

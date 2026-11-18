@@ -1,11 +1,12 @@
 import Link from 'next/link';
 import { THUMB_H, THUMB_W, type GalleryCard } from '@/lib/gallery-cards';
+import { EmptyGallery } from './EmptyGallery';
 import s from './gallery.module.css';
 
 /** The card grid on the home page, or the empty state. Server-renderable: no hooks, no client code. */
 export function GalleryGrid({ cards }: { cards: readonly GalleryCard[] }) {
   if (cards.length === 0) {
-    return <p className={s.empty}>No repos yet. Analyse one above.</p>;
+    return <EmptyGallery />;
   }
   return (
     <ul className={s.grid}>
