@@ -213,6 +213,31 @@ describe('AnalyseForm', () => {
     expect(push).toHaveBeenCalledWith('/r/octo/repo');
   });
 
+  it('ends in the error state when the status route always answers 503', async () => {
+    handler = (url) =>
+      url === '/api/analyze'
+        ? json({ status: 'job', id: '11111111-1111-4111-8111-111111111111' })
+        : json({ error: 'db_unavailable' }, 503);
+    render(<AnalyseForm />);
+    await submit();
+    await advance(10_000);
+    expect(screen.getByRole('alert').textContent).toMatch(/reach the server/i);
+    const polls = calls.filter((c) => c.url.startsWith('/api/jobs/')).length;
+    await advance(20_000);
+    expect(calls.filter((c) => c.url.startsWith('/api/jobs/')).length).toBe(polls); // stopped
+  });
+
+  it('ends in the error state when the status route always sends an unreadable body', async () => {
+    handler = (url) =>
+      url === '/api/analyze'
+        ? json({ status: 'job', id: '11111111-1111-4111-8111-111111111111' })
+        : new Response('<html>', { status: 200 });
+    render(<AnalyseForm />);
+    await submit();
+    await advance(10_000);
+    expect(screen.getByRole('alert')).toBeTruthy();
+  });
+
   it('goes back to the password prompt when the session expires mid-job', async () => {
     handler = (url) =>
       url === '/api/analyze'

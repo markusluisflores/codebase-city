@@ -236,6 +236,16 @@ describe('Viewer: arcs, states and accessibility', () => {
     expect(screen.getByRole('main').id).toBe('main');
   });
 
+  it('Escape closes the sheet even when focus is on the main region, not in the panels', async () => {
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    const button = screen.getByRole('button', { name: /report card and details/i });
+    await userEvent.click(button); // opens
+    screen.getByRole('main').focus(); // as after tapping the canvas
+    await userEvent.keyboard('{Escape}');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(button);
+  });
+
   it('selecting in the 2D view opens the details sheet', async () => {
     render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
     await userEvent.click(screen.getByRole('button', { name: '2D' }));

@@ -76,6 +76,19 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
     },
     [byPath, mode, ctx],
   );
+  // Escape closes the phone sheet wherever focus is (after a tap on the canvas it stays on <main>)
+  // and hands focus back to the button that opens it.
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setSheetOpen(false);
+      sheetButton.current?.focus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [sheetOpen]);
+
   const selectedFile = selectedPath === null ? null : (byPath.get(selectedPath) ?? null);
   // Arcs for the selected file only; none when nothing is selected.
   const arcs = useMemo(() => arcsFor(selectedFile, layout), [selectedFile, layout]);
@@ -138,17 +151,7 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
         {selectedPath === null ? '' : `Selected ${selectedPath}`}
       </p>
 
-      <div
-        className={s.panels}
-        data-open={sheetOpen}
-        onKeyDown={(e) => {
-          // Escape closes the phone sheet and hands focus back to the button that opens it.
-          if (e.key === 'Escape' && sheetOpen) {
-            setSheetOpen(false);
-            sheetButton.current?.focus();
-          }
-        }}
-      >
+      <div className={s.panels} data-open={sheetOpen}>
         <button
           ref={sheetButton}
           type="button"

@@ -86,10 +86,10 @@ export function AnalyseForm({
         });
         const body = await readJson(res);
         if (controller.signal.aborted) return;
-        failures = 0;
         if (res.status === 401) return setStep({ kind: 'needPassword', busy: false, error: null });
         // A server error or an unreadable reply while the job runs is transient: count it and keep polling.
         if (res.status >= 500 || (res.ok && !isKnownPhase(body.phase))) throw new Error('poll');
+        failures = 0; // only a good reply resets the count
         if (!res.ok) return setStep({ kind: 'error', code: codeOf(body) });
         if (body.phase === 'done') {
           setStep({ kind: 'done' });
