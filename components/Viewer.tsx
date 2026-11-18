@@ -14,7 +14,7 @@ import {
   type ColourMode,
 } from '@/lib/render/colours';
 import { districtBadges } from '@/lib/render/legend';
-import { districtTooltip, formatDay, shortSha } from '@/lib/viewer/model';
+import { districtTooltip, formatDay, shortSha, treemapTooltip } from '@/lib/viewer/model';
 import { CityCanvas, type CityCanvasHandle, type CityHit } from './CityCanvas';
 import { DetailsPanel } from './DetailsPanel';
 import { Legend } from './Legend';
@@ -119,6 +119,11 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
     [badgeByPath],
   );
 
+  const treemapText = useCallback(
+    (path: string) => treemapTooltip(path, badgeByPath),
+    [badgeByPath],
+  );
+
   const day = analysedAt ? analysedAt.slice(0, 10) : formatDay(win.to);
   const effectiveView: View = noWebGL ? '2d' : view;
 
@@ -191,6 +196,7 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
               colourOf={colourOf}
               selectedPath={selectedPath}
               badgedDistricts={badged}
+              tooltipText={treemapText}
               onSelect={(path) => {
                 setSelectedPath(path);
                 if (path !== null) setSheetOpen(true);

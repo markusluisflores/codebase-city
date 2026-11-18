@@ -135,6 +135,16 @@ describe('Viewer', () => {
     expect(treemapProps?.files).toHaveLength(4);
     expect(treemapProps?.colourOf('src/a.ts')).toMatch(/^#[0-9a-f]{6}$/i);
   });
+
+  it('2D tooltip keeps the file path and adds the single-owner district line', async () => {
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    await userEvent.click(screen.getByRole('button', { name: '2D' }));
+    expect([...(treemapProps?.badgedDistricts ?? [])]).toEqual(['src']);
+    expect(treemapProps?.tooltipText?.('src/a.ts')).toBe(
+      'src/a.ts (single owner: Ada Lovelace (86%))',
+    );
+    expect(treemapProps?.tooltipText?.('docs/readme.md')).toBe('docs/readme.md');
+  });
 });
 
 describe('ViewerLoader', () => {

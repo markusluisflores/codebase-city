@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { districtTooltip, formatDay, percent, searchPaths, shortSha } from '@/lib/viewer/model';
+import {
+  districtTooltip,
+  formatDay,
+  percent,
+  searchPaths,
+  shortSha,
+  treemapTooltip,
+} from '@/lib/viewer/model';
 
 describe('percent', () => {
   it('renders 0 as 0%, not blank, and rounds', () => {
@@ -13,6 +20,25 @@ describe('percent', () => {
 describe('districtTooltip', () => {
   it('reads single owner: name (share%)', () => {
     expect(districtTooltip({ ownerName: 'Ada', share: 0.86 })).toBe('single owner: Ada (86%)');
+  });
+});
+
+describe('treemapTooltip', () => {
+  const badges = new Map([
+    ['src', { path: 'src', ownerName: 'Ada', share: 0.86 }],
+    ['src/deep', { path: 'src/deep', ownerName: 'Bo', share: 0.9 }],
+  ]);
+  it('is the bare path for a file outside every badged district', () => {
+    expect(treemapTooltip('docs/readme.md', badges)).toBe('docs/readme.md');
+    expect(treemapTooltip('src.md', badges)).toBe('src.md');
+  });
+  it('appends the district line, reusing districtTooltip, for a file inside one', () => {
+    expect(treemapTooltip('src/a.ts', badges)).toBe(
+      `src/a.ts (${districtTooltip(badges.get('src')!)})`,
+    );
+  });
+  it('uses the deepest badged district', () => {
+    expect(treemapTooltip('src/deep/x.ts', badges)).toBe('src/deep/x.ts (single owner: Bo (90%))');
   });
 });
 
