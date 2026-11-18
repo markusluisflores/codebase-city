@@ -71,7 +71,8 @@ describe('loading, empty and retry states', () => {
   it('renders a loading skeleton while the Analysis fetches', () => {
     vi.stubGlobal('fetch', () => new Promise(() => undefined));
     render(<ViewerLoader owner="octo" repo="repo" />);
-    expect(screen.getByRole('status').getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByRole('main').getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByRole('status').textContent).toMatch(/loading the analysis/i);
     expect(screen.getByText(/loading the analysis/i)).toBeTruthy();
   });
 

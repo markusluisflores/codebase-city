@@ -46,10 +46,13 @@ const MAX_POLL_FAILURES = 3;
  */
 export function AnalyseForm({
   initialRepo = '',
+  currentRepo,
   onDone,
 }: {
   initialRepo?: string;
-  /** Called instead of navigating, for a page that already shows this repo and just needs to reload it. */
+  /** The `owner/name` the page already shows. When the finished analysis is for it, `onDone` runs instead of navigating. */
+  currentRepo?: string;
+  /** Reloads the page's own repo (used with `currentRepo`). */
   onDone?: () => void;
 }) {
   const router = useRouter();
@@ -59,12 +62,14 @@ export function AnalyseForm({
   const passwordRef = useRef<HTMLInputElement>(null);
   const routerRef = useRef(router);
   const doneRef = useRef(onDone);
+  const currentRef = useRef(currentRepo);
   const id = useId();
   const jobId = step.kind === 'running' ? step.jobId : null;
 
   useEffect(() => {
     routerRef.current = router;
     doneRef.current = onDone;
+    currentRef.current = currentRepo;
   });
 
   // The poll loop for the current job: one timer at a time, and the cleanup stops everything when the
@@ -83,10 +88,12 @@ export function AnalyseForm({
         if (controller.signal.aborted) return;
         failures = 0;
         if (res.status === 401) return setStep({ kind: 'needPassword', busy: false, error: null });
+        // A server error or an unreadable reply while the job runs is transient: count it and keep polling.
+        if (res.status >= 500 || (res.ok && !isKnownPhase(body.phase))) throw new Error('poll');
         if (!res.ok) return setStep({ kind: 'error', code: codeOf(body) });
         if (body.phase === 'done') {
           setStep({ kind: 'done' });
-          return finish(routerRef.current, target.current, doneRef.current);
+          return finish(routerRef.current, target.current, currentRef.current, doneRef.current);
         }
         if (body.phase === 'failed') {
           const code = typeof body.errorCode === 'string' ? body.errorCode : 'internal_error';
@@ -141,7 +148,7 @@ export function AnalyseForm({
     ) {
       target.current = `${body.owner}/${body.name}`.toLowerCase();
       setStep({ kind: 'done' });
-      return finish(routerRef.current, target.current, doneRef.current);
+      return finish(routerRef.current, target.current, currentRef.current, doneRef.current);
     }
     if (body.status === 'job' && typeof body.id === 'string') {
       return setStep({ kind: 'running', jobId: body.id, phase: 'queued' });
@@ -202,7 +209,7 @@ export function AnalyseForm({
             maxLength={300}
             placeholder="vercel/next.js"
             value={repo}
-            disabled={busy}
+            readOnly={busy} // not disabled: focus stays on the field while the job runs
             onChange={(e) => setRepo(e.target.value)}
           />
           <button type="submit" className={s.button} disabled={busy || repo.trim() === ''}>
@@ -257,17 +264,25 @@ export function AnalyseForm({
         </form>
       ) : null}
 
-      {step.kind === 'error' ? <ErrorState code={step.code} onRetry={() => void start()} /> : null}
+      {step.kind === 'error' ? (
+        <ErrorState
+          code={step.code}
+          onRetry={step.code === 'invalid_repo' ? undefined : () => void start()}
+        />
+      ) : null}
     </div>
   );
 }
 
+const isKnownPhase = (p: unknown): boolean => p === 'done' || p === 'failed' || isActivePhase(p);
+
 function finish(
   router: ReturnType<typeof useRouter>,
   repo: string | null,
+  current: string | undefined,
   onDone: (() => void) | undefined,
 ): void {
-  if (onDone) return onDone();
+  if (onDone && repo !== null && repo === current?.toLowerCase()) return onDone();
   const [owner, name] = (repo ?? '').split('/');
   if (owner && name) router.push(`/r/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`);
 }

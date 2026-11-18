@@ -20,7 +20,11 @@ export function ViewerLoader({ owner, repo }: { owner: string; repo: string }) {
         <main id="main" tabIndex={-1} className={s.state}>
           <h1>{`${owner.toLowerCase()}/${repo.toLowerCase()} is not analysed yet`}</h1>
           <p>{errorMessage('analysis_not_found')}</p>
-          <AnalyseForm initialRepo={`${owner}/${repo}`} onDone={reload} />
+          <AnalyseForm
+            initialRepo={`${owner}/${repo}`}
+            currentRepo={`${owner}/${repo}`}
+            onDone={reload}
+          />
           <p>
             <Link href="/">Back to the gallery</Link>
           </p>

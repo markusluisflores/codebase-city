@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { loadAnalysis, type ViewerState } from './load';
 
 /**
- * Loads the analysis for a repo and returns the state plus a `reload` (Task 15b's retry button).
+ * Loads the analysis for a repo and returns the state plus a `reload` (the retry button).
  * A change of owner or repo, or a reload, starts a fresh load; a stale response is ignored. The
  * state is "loading" whenever the stored result belongs to an earlier request.
  */

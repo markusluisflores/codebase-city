@@ -178,7 +178,7 @@ describe('Viewer: arcs, states and accessibility', () => {
     act(() => cityProps?.onSelect?.({ kind: 'building', path: 'src/a.ts' }));
     expect(cityProps?.arcs).toHaveLength(1);
     expect(cityProps?.arcs?.[0]?.path).toBe('src/b.ts');
-    // docs/readme.md has the fixture's one partner (src/b.ts) too; a file with none gets none.
+    // A file with no partners gets no arcs.
     act(() => cityProps?.onSelect?.({ kind: 'building', path: 'docs/old file #1.md' }));
     expect(cityProps?.arcs).toEqual([]);
     act(() => cityProps?.onSelect?.(null));
@@ -234,6 +234,15 @@ describe('Viewer: arcs, states and accessibility', () => {
     expect(document.activeElement).toBe(screen.getByRole('main'));
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('main').id).toBe('main');
+  });
+
+  it('selecting in the 2D view opens the details sheet', async () => {
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    await userEvent.click(screen.getByRole('button', { name: '2D' }));
+    const button = screen.getByRole('button', { name: /report card and details/i });
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    act(() => treemapProps?.onSelect?.('src/a.ts'));
+    expect(button.getAttribute('aria-expanded')).toBe('true');
   });
 
   it('repo-derived strings render as text, never as elements', () => {

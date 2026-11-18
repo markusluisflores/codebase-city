@@ -88,7 +88,7 @@ describe('AnalyseForm', () => {
         : json({ phase: 'queued' });
     render(<AnalyseForm />);
     await submit();
-    expect((screen.getByLabelText(/github repository/i) as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByLabelText(/github repository/i) as HTMLInputElement).readOnly).toBe(true);
     expect((screen.getByRole('button', { name: 'Analyse' }) as HTMLButtonElement).disabled).toBe(
       true,
     );
@@ -197,10 +197,53 @@ describe('AnalyseForm', () => {
     });
   });
 
+  it('keeps polling through a 503 and an unreadable reply, then finishes', async () => {
+    let n = 0;
+    handler = (url) => {
+      if (url === '/api/analyze')
+        return json({ status: 'job', id: '11111111-1111-4111-8111-111111111111' });
+      n += 1;
+      if (n === 1) return json({ error: 'db_unavailable' }, 503);
+      if (n === 2) return new Response('<html>', { status: 200 });
+      return json({ phase: 'done' });
+    };
+    render(<AnalyseForm />);
+    await submit();
+    await advance(4000);
+    expect(push).toHaveBeenCalledWith('/r/octo/repo');
+  });
+
+  it('goes back to the password prompt when the session expires mid-job', async () => {
+    handler = (url) =>
+      url === '/api/analyze'
+        ? json({ status: 'job', id: '11111111-1111-4111-8111-111111111111' })
+        : json({ error: 'unauthorized' }, 401);
+    render(<AnalyseForm />);
+    await submit();
+    expect(screen.getByLabelText(/demo password/i)).toBeTruthy();
+  });
+
+  it('offers no retry for an invalid repo', async () => {
+    handler = () => json({});
+    render(<AnalyseForm />);
+    await submit('not a repo');
+    expect(screen.queryByRole('button', { name: /try again/i })).toBeNull();
+  });
+
+  it('navigates to the typed repo when it is not the one the page shows', async () => {
+    handler = () => json({ status: 'cached', source: 'live', owner: 'baz', name: 'qux' });
+    const onDone = vi.fn();
+    render(<AnalyseForm initialRepo="baz/qux" currentRepo="foo/bar" onDone={onDone} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Analyse' }));
+    await flush();
+    expect(push).toHaveBeenCalledWith('/r/baz/qux');
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
   it('prefills the repo from initialRepo and calls onDone instead of navigating', async () => {
     handler = () => json({ status: 'cached', source: 'live', owner: 'octo', name: 'repo' });
     const onDone = vi.fn();
-    render(<AnalyseForm initialRepo="octo/repo" onDone={onDone} />);
+    render(<AnalyseForm initialRepo="octo/repo" currentRepo="Octo/Repo" onDone={onDone} />);
     expect((screen.getByLabelText(/github repository/i) as HTMLInputElement).value).toBe(
       'octo/repo',
     );

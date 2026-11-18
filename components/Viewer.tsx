@@ -188,7 +188,10 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
               colourOf={colourOf}
               selectedPath={selectedPath}
               badgedDistricts={badged}
-              onSelect={setSelectedPath}
+              onSelect={(path) => {
+                setSelectedPath(path);
+                if (path !== null) setSheetOpen(true);
+              }}
             />
           )}
         </div>
