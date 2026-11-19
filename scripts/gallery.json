@@ -1,1 +1,9 @@
-[]
+[
+  "expressjs/express",
+  "vitejs/vite",
+  "sveltejs/svelte",
+  "django/django",
+  "rust-lang/cargo",
+  "vuejs/core",
+  "markusluisflores/the-fourth-official"
+]
