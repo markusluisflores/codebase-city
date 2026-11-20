@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "1.2.0",
-    "@vercel/sandbox": "3.9.1",
+    "@vercel/sandbox": "4.0.0",
     "d3-hierarchy": "3.1.2",
     "next": "16.4.5",
     "react": "^19.3.1",
