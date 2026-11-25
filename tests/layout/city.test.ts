@@ -237,6 +237,26 @@ describe('cityLayout', () => {
       expect(big.height / cell(l)).toBeCloseTo(MAX_HEIGHT, 9);
     });
 
+    it('keeps merged "(other)" buildings finite, in range and deterministic', () => {
+      const input: F[] = [
+        ...Array.from({ length: 200 }, (_, i) => ({
+          path: `d${i % 4}/f${i}.ts`,
+          size: 1 + ((i * 7919) % 5000),
+        })),
+        { path: 'd0/outlier.bin', size: 1e12 },
+      ];
+      const a = cityLayout(input, 50);
+      const b = cityLayout(input, 50);
+      expect(a.buildings.length).toBeLessThanOrEqual(50);
+      expect(a.buildings.length).toBeLessThan(input.length);
+      for (const h of heightsInCells(a)) {
+        expect(Number.isFinite(h)).toBe(true);
+        expect(h).toBeGreaterThanOrEqual(MIN_HEIGHT - 1e-9);
+        expect(h).toBeLessThanOrEqual(MAX_HEIGHT + 1e-9);
+      }
+      expect(b).toEqual(a);
+    });
+
     it('gives all-zero and single-file cities finite heights', () => {
       const zeros = cityLayout(Array.from({ length: 5 }, (_, i) => ({ path: `a/z${i}`, size: 0 })));
       for (const h of heightsInCells(zeros)) expect(h).toBeCloseTo(MIN_HEIGHT, 9);

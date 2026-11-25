@@ -119,9 +119,10 @@ function compare(a: string, b: string): number {
 /**
  * City layout: districts are the folders at depth 1 and 2 (a depth-2 district nests in its
  * depth-1 parent), laid out as a squarified treemap weighted by building count; every district
- * holds its buildings in a grid of equal footprints, with heights on a square-root scale of size, capped at the 98th percentile of sizes.
- * Past `maxBuildings` the smallest files of each district merge into one "(other)" building, and
- * those count towards the cap (best effort only if there are more leaf districts than the cap).
+ * holds its buildings in a grid of equal footprints, with heights on a square-root scale of
+ * size, capped at the 98th percentile of sizes. Past `maxBuildings` the smallest files of each
+ * district merge into one "(other)" building, and those count towards the cap (best effort only
+ * if there are more leaf districts than the cap).
  */
 export function cityLayout(files: SizedFile[], maxBuildings = 5000): CityLayout {
   if (files.length === 0) return { buildings: [], districts: [] };
