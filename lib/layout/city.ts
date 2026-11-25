@@ -42,7 +42,10 @@ export const MAX_HEIGHT = 10;
 const REFERENCE_PERCENTILE = 0.98;
 /** Rounds in which districts that cannot fit at MIN_CELL have their treemap weight doubled. */
 const MAX_WEIGHT_PASSES = 12;
-/** The shared grid cell never shrinks below this (a fraction of the nominal 1), however awkward a district is. */
+/**
+ * The shared grid cell (a fraction of the nominal 1) shrinks in 0.9 steps only while it stays at
+ * or above this, so it ends at 0.9^MAX_SHRINK_STEPS, the last step that is still >= MIN_CELL.
+ */
 export const MIN_CELL = 0.6;
 const MAX_SHRINK_STEPS = Math.floor(Math.log(MIN_CELL) / Math.log(0.9));
 /** Districts that still cannot hold their grid at the shared cell shrink their own cell instead. */
@@ -129,7 +132,8 @@ function compare(a: string, b: string): number {
 
 /**
  * City layout: districts are the folders at depth 1 and 2 (a depth-2 district nests in its
- * depth-1 parent), laid out as a squarified treemap weighted by building count; every district
+ * depth-1 parent), laid out as a squarified treemap weighted by building count (a district that
+ * cannot hold its grid at the shared cell floor has its weight doubled and the layout repeated); every district
  * holds its buildings in a grid of equal footprints, with heights on a square-root scale of
  * size, capped at the 98th percentile of sizes. Past `maxBuildings` the smallest files of each
  * district merge into one "(other)" building, and those count towards the cap (best effort only

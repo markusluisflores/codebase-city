@@ -384,6 +384,8 @@ describe('world-unit scale (a narrow district must not collapse the cell)', () =
     expect(minFoot(l) / floor).toBeGreaterThan(0.003);
     expect(tallest(l) / floor).toBeGreaterThan(0.03);
     expect(minFoot(l)).toBeGreaterThanOrEqual(MIN_CELL * 0.8 - EPS);
+    // One shared cell: equal footprints prove no district fell back to a smaller local cell.
+    expect(maxFoot(l) - minFoot(l)).toBeLessThanOrEqual(EPS);
     // Nothing leaves the plate, and nothing overlaps.
     for (const b of l.buildings) {
       expect(Math.abs(b.x) + b.footprint / 2).toBeLessThanOrEqual(half + EPS);
