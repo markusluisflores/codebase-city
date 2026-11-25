@@ -289,14 +289,20 @@ describe('give-back paths in createOrReuseJob and takeLookup', () => {
     expect(await analyses()).toBe(0);
   });
 
-  it('a failed give-back after a global lookup refusal still reports the refusal', async () => {
-    await t.pg.query(
-      `INSERT INTO usage_counters (period, count) VALUES ('lk:2026-11-16T12:g', 400)`,
-    );
+  it('a failed give-back after a per-IP lookup refusal still reports the refusal', async () => {
+    await t.pg.query(`INSERT INTO usage_counters (period, count) VALUES ($1, $2)`, [
+      `lk:2026-11-16T12:ip:${KEY()}`,
+      LOOKUP_LIMIT_PER_IP_HOUR,
+    ]);
+    let gaveBack = false;
     wrap((sql) => {
-      if (sql.startsWith('UPDATE usage_counters SET count = GREATEST')) throw new Error('db blip');
+      if (sql.startsWith('UPDATE usage_counters SET count = GREATEST')) {
+        gaveBack = true;
+        throw new Error('db blip');
+      }
     });
     expect(await takeLookup(KEY(), NOW)).toMatchObject({ ok: false });
+    expect(gaveBack).toBe(true); // the give-back really ran and failed, and the refusal still came back
   });
 });
 
