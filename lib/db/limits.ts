@@ -110,9 +110,8 @@ const checkIpKey = (key: string): string => {
 const GIVE_BACK = `UPDATE usage_counters SET count = GREATEST(count - 1, 0) WHERE period = $1`;
 
 /**
- * Takes one GitHub lookup for this IP and one global one, for the UTC hour of `now`. The per-IP counter
- * is taken first; if the global ceiling then refuses, the per-IP unit goes back, so a refusal costs
- * nothing. Both increments are single conditional upserts (atomic under concurrency). Counters from past
+ * Takes one global GitHub lookup and one for this IP, for the UTC hour of `now`. The global counter is
+ * taken first; if the per-IP limit then refuses, the global unit goes back, so a refusal costs nothing. Both increments are single conditional upserts (atomic under concurrency). Counters from past
  * hours are purged here. A throw means the caller must deny.
  */
 export async function takeLookup(
@@ -127,16 +126,18 @@ export async function takeLookup(
   await db
     .query(`DELETE FROM usage_counters WHERE period LIKE 'lk:%' AND period < $1`, [`lk:${hour}`])
     .catch(() => undefined);
-  if ((await db.query(TAKE_UNIT, [perIp, LOOKUP_LIMIT_PER_IP_HOUR])).length === 0) return refused;
+  // The global ceiling is taken first: once it is full no per-IP row is ever created, so the table grows
+  // with the ceiling (400 an hour), not with the number of client IPs a caller can present.
+  if ((await db.query(TAKE_UNIT, [global, LOOKUP_LIMIT_GLOBAL_HOUR])).length === 0) return refused;
   let taken: unknown[];
   try {
-    taken = await db.query(TAKE_UNIT, [global, LOOKUP_LIMIT_GLOBAL_HOUR]);
+    taken = await db.query(TAKE_UNIT, [perIp, LOOKUP_LIMIT_PER_IP_HOUR]);
   } catch (err) {
-    await db.query(GIVE_BACK, [perIp]).catch(() => undefined);
+    await db.query(GIVE_BACK, [global]).catch(() => undefined);
     throw err;
   }
   if (taken.length === 0) {
-    await db.query(GIVE_BACK, [perIp]).catch(() => undefined);
+    await db.query(GIVE_BACK, [global]).catch(() => undefined);
     return refused;
   }
   return { ok: true };

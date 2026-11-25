@@ -68,13 +68,13 @@ describe('takeLookup', () => {
     expect(await count('lk:2026-11-16T12:g')).toBe(LOOKUP_LIMIT_PER_IP_HOUR);
   });
 
-  it('refuses everyone at the global hourly ceiling and gives the per-IP unit back', async () => {
+  it('refuses everyone at the global hourly ceiling and creates no per-IP row', async () => {
     await t.pg.query(
       `INSERT INTO usage_counters (period, count) VALUES ('lk:2026-11-16T12:g', $1)`,
       [LOOKUP_LIMIT_GLOBAL_HOUR],
     );
     expect(await takeLookup(A, NOW)).toEqual({ ok: false, retryAfterS: 30 * 60 });
-    expect(await count(`lk:2026-11-16T12:ip:${A}`)).toBe(0);
+    expect(await count(`lk:2026-11-16T12:ip:${A}`)).toBeUndefined(); // table growth stays bounded
   });
 
   it('starts fresh in the next UTC hour', async () => {
