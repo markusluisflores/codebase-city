@@ -34,8 +34,8 @@ export function FolderList({ folders, chosenPath, onPreview, onChoose }: FolderL
         Folders <span className={s.foldersCount}>{folders.length}</span>
       </summary>
       <p className={s.hint}>
-        Districts in the city: hover to find one, click to fly there. Largest first, with file
-        counts.
+        Districts in the city: hover to find one, click to keep it lit (and fly there in 3D).
+        Largest first, with file counts.
       </p>
       <ul className={s.folderList} onMouseLeave={() => onPreview(null)}>
         {shown.map((f) => (

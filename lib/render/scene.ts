@@ -34,6 +34,7 @@ import {
   MIN_LABEL_WIDTH,
   chooseLabels,
   isLabelDistrict,
+  screenRect,
   type LabelCandidate,
 } from './labels';
 
@@ -276,30 +277,15 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
     const height = canvas.clientHeight;
     const candidates: LabelCandidate[] = [];
     camera.updateMatrixWorld();
-    outer: for (const c of labelCandidates) {
-      let x0 = Infinity;
-      let y0 = Infinity;
-      let x1 = -Infinity;
-      let y1 = -Infinity;
-      for (const corner of c.corners) {
+    for (const c of labelCandidates) {
+      const ndc = c.corners.map((corner) => {
         scratch.copy(corner).applyMatrix4(camera.matrixWorldInverse);
-        // A corner behind the camera would mis-project: skip the district instead.
-        if (scratch.z >= -camera.near) continue outer;
+        const behind = scratch.z >= -camera.near;
         scratch.copy(corner).project(camera);
-        const px = ((scratch.x + 1) / 2) * width;
-        const py = ((1 - scratch.y) / 2) * height;
-        x0 = Math.min(x0, px);
-        y0 = Math.min(y0, py);
-        x1 = Math.max(x1, px);
-        y1 = Math.max(y1, py);
-      }
-      // Clamp to the viewport so a district larger than the screen is labelled where it can be seen.
-      x0 = Math.max(0, x0);
-      y0 = Math.max(0, y0);
-      x1 = Math.min(width, x1);
-      y1 = Math.min(height, y1);
-      if (x1 <= x0 || y1 <= y0) continue;
-      candidates.push({ path: c.path, x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+        return { x: scratch.x, y: scratch.y, behind };
+      });
+      const rect = screenRect(ndc, width, height);
+      if (rect) candidates.push({ path: c.path, ...rect });
     }
     const placed = chooseLabels(candidates, {
       minWidth: MIN_LABEL_WIDTH,

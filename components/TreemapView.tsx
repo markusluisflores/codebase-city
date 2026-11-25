@@ -65,16 +65,16 @@ export function TreemapView({
     [rects, badgedDistricts],
   );
 
-  // Rectangles of every district, for the name labels and the folder-list highlight.
-  const districtBoxes = useMemo(() => {
-    const wanted = new Set(districtPaths ?? []);
-    if (highlightedDistrict !== null) wanted.add(highlightedDistrict);
-    return districtBounds(rects, wanted);
-  }, [rects, districtPaths, highlightedDistrict]);
+  // Rectangles of every district, computed once per layout; hover only looks one up.
+  const districtBoxes = useMemo(
+    () => districtBounds(rects, new Set(districtPaths ?? [])),
+    [rects, districtPaths],
+  );
   const labels = useMemo(() => {
     const all = districtPaths ?? [];
+    const known = new Set(all);
     const candidates = districtBoxes
-      .filter((b) => isLabelDistrict(b.path, all) && all.includes(b.path))
+      .filter((b) => known.has(b.path) && isLabelDistrict(b.path, all))
       .map((b) => ({ path: b.path, x: b.x, y: b.y, w: b.w, h: b.h }));
     return chooseLabels(candidates, {
       minWidth: MIN_LABEL_WIDTH,

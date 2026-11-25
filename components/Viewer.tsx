@@ -83,11 +83,14 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
 
   const chooseFolder = useCallback(
     (path: string) => {
+      // A tap fires hover and focus first and nothing clears them: drop the preview so the tint follows the choice.
+      setPreviewFolder(null);
       if (chosenFolder === path) {
         setChosenFolder(null);
         return;
       }
       setChosenFolder(path);
+      setSheetOpen(false); // On phones the sheet would cover the district the camera flies to.
       if (view === '3d' && !noWebGL) city.current?.flyToDistrict(path);
     },
     [chosenFolder, view, noWebGL],

@@ -6,6 +6,7 @@ import {
   fitLabel,
   isLabelDistrict,
   labelOpacity,
+  screenRect,
   type LabelCandidate,
 } from '@/lib/render/labels';
 
@@ -99,5 +100,27 @@ describe('districtFileCounts', () => {
     expect(counts.get('src')).toBe(2);
     expect(counts.get('src/util')).toBe(1);
     expect(counts.get('docs')).toBe(1);
+  });
+});
+
+describe('screenRect', () => {
+  const at = (x: number, y: number, behind = false) => ({ x, y, behind });
+  it('maps NDC corners to pixels (y up becomes y down)', () => {
+    const r = screenRect([at(-0.5, 0.5), at(0.5, 0.5), at(0.5, -0.5), at(-0.5, -0.5)], 400, 200);
+    expect(r).toEqual({ x: 100, y: 50, w: 200, h: 100 });
+  });
+  it('clamps a district larger than the screen to the viewport', () => {
+    const r = screenRect([at(-3, 3), at(3, 3), at(3, -3), at(-3, -3)], 400, 200);
+    expect(r).toEqual({ x: 0, y: 0, w: 400, h: 200 });
+  });
+  it('clips a partly visible district to its visible part', () => {
+    const r = screenRect([at(0, 1), at(2, 1), at(2, -1), at(0, -1)], 400, 200);
+    expect(r).toEqual({ x: 200, y: 0, w: 200, h: 200 });
+  });
+  it('returns null when wholly off screen', () => {
+    expect(screenRect([at(2, 0), at(3, 0), at(3, 1), at(2, 1)], 400, 200)).toBeNull();
+  });
+  it('returns null when any corner is behind the camera', () => {
+    expect(screenRect([at(0, 0), at(0.5, 0), at(0.5, 0.5, true), at(0, 0.5)], 400, 200)).toBeNull();
   });
 });

@@ -177,8 +177,15 @@ describe('Viewer: folder list', () => {
     await userEvent.unhover(row);
     expect(cityProps?.highlightedDistrict).toBe('src');
     await userEvent.click(row);
-    await userEvent.unhover(row);
+    // The pointer is still over the row (a tap never leaves): the tint must follow the choice, not the preview.
     expect(cityProps?.highlightedDistrict).toBeNull();
+  });
+
+  it('a click closes the phone sheet so it does not cover the district', async () => {
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    await userEvent.click(screen.getByRole('button', { name: /show report card/i }));
+    await userEvent.click(srcRow());
+    expect(screen.getByRole('button', { name: /show report card/i })).toBeTruthy();
   });
 
   it('in 2D the treemap gets the paths and the tint, and a click does not fly', async () => {

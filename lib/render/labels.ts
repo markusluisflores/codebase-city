@@ -109,3 +109,35 @@ export function chooseLabels(
   }
   return placed;
 }
+
+/**
+ * Screen rectangle of a district's floor corners, given each corner in normalised device
+ * coordinates (-1 to 1, y up) and whether it is behind the camera. Returns null when any corner is
+ * behind the camera (it would mis-project) or the rectangle is wholly off screen; otherwise the
+ * rectangle is clamped to the viewport so a district larger than the screen is labelled where it shows.
+ */
+export function screenRect(
+  corners: readonly { x: number; y: number; behind: boolean }[],
+  width: number,
+  height: number,
+): { x: number; y: number; w: number; h: number } | null {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const c of corners) {
+    if (c.behind) return null;
+    const px = ((c.x + 1) / 2) * width;
+    const py = ((1 - c.y) / 2) * height;
+    x0 = Math.min(x0, px);
+    y0 = Math.min(y0, py);
+    x1 = Math.max(x1, px);
+    y1 = Math.max(y1, py);
+  }
+  x0 = Math.max(0, x0);
+  y0 = Math.max(0, y0);
+  x1 = Math.min(width, x1);
+  y1 = Math.min(height, y1);
+  if (!(x1 > x0 && y1 > y0)) return null;
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
