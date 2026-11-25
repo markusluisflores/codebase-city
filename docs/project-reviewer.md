@@ -194,7 +194,7 @@ An honest, defensible answer, in order of weight:
 
 **The longer version:** Production went live on 2026-11-19 at `codebase-city-spike.vercel.app` on Vercel Hobby. Production and Preview share the same Neon database and reuse the existing secrets; this was Markus's decision (executor notes, "2026-11-25 Production deploy"). The rationale (simplest route for a demo) and the cleaner alternative (a separate database and secrets for Production, not done) are not recorded in the repo or those notes; confirm with Markus before quoting them. A consequence I infer, not a recorded finding: a Preview deploy can read and write production cache, jobs and quota rows, so a bad preview build can affect the live site. `docs/deployed-services.md` in the workspace was updated at deploy time.
 
-**Interview talking point:** "I shared one Neon database and the existing secrets between Production and Preview because it was the simplest route for a demo (confirm this is the reason you want to give). I know the clean answer is a separate database for Production, and I'd do that before real users: a preview should not be able to touch production rows."
+**Interview talking point:** "I shared one Neon database and the existing secrets between Production and Preview because it was the simplest route for a demo. I know the clean answer is a separate database for Production, and I'd do that before real users: a preview should not be able to touch production rows." (Confirm the stated reason with Markus before using it.)
 
 ### 8. Scaling height: the 98th percentile, not the maximum (PR 26)
 
