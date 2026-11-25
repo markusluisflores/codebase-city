@@ -61,7 +61,16 @@ export async function putCached(analysis: Analysis, now: Date): Promise<void> {
   try {
     await putCard(valid.repo.owner, valid.repo.name, valid.schemaVersion, galleryCard(valid, now));
   } catch {
-    // Left without a card (or with the previous one); see lib/db/cards.ts.
+    // On a re-analysis the row still holds the previous analysis's card. Clear it (best effort) so
+    // the home page backfills a fresh one instead of showing a stale card; see lib/db/cards.ts.
+    try {
+      await getDb().query(
+        `UPDATE analyses SET card = NULL WHERE owner = $1 AND name = $2 AND schema_version = $3`,
+        [keyPart(valid.repo.owner), keyPart(valid.repo.name), valid.schemaVersion],
+      );
+    } catch {
+      // The column may not exist at all; nothing more to do.
+    }
   }
 }
 

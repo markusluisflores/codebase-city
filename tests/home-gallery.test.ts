@@ -188,6 +188,41 @@ describe('live cards in Postgres', () => {
     expect(await backfillCards(5)).toBe(0);
   });
 
+  it('backfill marks an unparsable row with a sentinel, skips it next time, and still fills later rows', async () => {
+    await putCached(sampleAnalysis('a', 'good'), new Date('2026-11-01T00:00:00Z'));
+    await putCached(sampleAnalysis('b', 'broken'), new Date('2026-11-02T00:00:00Z'));
+    await t.pg.exec('UPDATE analyses SET card = NULL');
+    await t.pg.exec(`UPDATE analyses SET analysis = '{"nope":true}'::jsonb WHERE name = 'broken'`);
+    // 'broken' is newer, so it is read first; the valid row after it must still be filled.
+    expect(await backfillCards(5)).toBe(1);
+    expect((await listLiveCards(24)).map((c) => c.name)).toEqual(['good']);
+    const sentinel = await t.pg.query<{ card: unknown }>(
+      `SELECT card FROM analyses WHERE name = 'broken'`,
+    );
+    expect(sentinel.rows[0]!.card).toEqual({});
+    expect(await backfillCards(5)).toBe(0);
+  });
+
+  it('a failed card write on a re-analysis clears the old card instead of keeping it', async () => {
+    await putCached(sampleAnalysis('a', 'x'), new Date('2026-11-01T00:00:00Z'));
+    const real = pgAdapter(t.pg);
+    let failed = false;
+    setDb({
+      query: async (text, params) => {
+        if (!failed && text.includes('SET card = $4')) {
+          failed = true;
+          throw new Error('card write failed');
+        }
+        return real.query(text, params);
+      },
+    });
+    await putCached(sampleAnalysis('a', 'x'), new Date('2026-11-09T00:00:00Z'));
+    expect(failed).toBe(true);
+    const rows = await t.pg.query<{ card: unknown }>('SELECT card FROM analyses');
+    expect(rows.rows).toHaveLength(1);
+    expect(rows.rows[0]!.card).toBeNull();
+  });
+
   it('a failed card write does not fail putCached or lose the analysis', async () => {
     const real = pgAdapter(t.pg);
     setDb({
