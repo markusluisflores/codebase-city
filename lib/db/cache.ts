@@ -1,5 +1,6 @@
 import { parseAnalysis } from '@/lib/analysis/schema';
 import type { Analysis } from '@/lib/analysis/types';
+import { galleryCard, type GalleryCard } from '@/lib/gallery-cards';
 import { getDb } from './client';
 
 // GitHub owner and repo names are case-insensitive, so the key is stored lower-case.
@@ -54,5 +55,25 @@ export async function putCached(analysis: Analysis, now: Date): Promise<void> {
       now.toISOString(),
       JSON.stringify(valid),
     ],
+  );
+  // The home-page card is best effort: it must never fail or undo an analysis (the column may not be
+  // migrated yet, or the card may not build). A missing card is filled in later by the home page.
+  try {
+    await putCard(valid.repo.owner, valid.repo.name, valid.schemaVersion, galleryCard(valid, now));
+  } catch {
+    // Left without a card (or with the previous one); see lib/db/cards.ts.
+  }
+}
+
+/** Stores the home-page card for a row (throws on a database error, for example an unmigrated table). */
+export async function putCard(
+  owner: string,
+  name: string,
+  schemaVersion: number,
+  card: GalleryCard,
+): Promise<void> {
+  await getDb().query(
+    `UPDATE analyses SET card = $4::jsonb WHERE owner = $1 AND name = $2 AND schema_version = $3`,
+    [keyPart(owner), keyPart(name), schemaVersion, JSON.stringify(card)],
   );
 }
