@@ -17,13 +17,14 @@ vi.mock('@/lib/a11y', async (orig) => ({
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 const flyToPath = vi.fn();
+const flyToDistrict = vi.fn();
 let cityProps: CityCanvasProps | null = null;
 let treemapProps: TreemapViewProps | null = null;
 
 vi.mock('@/components/CityCanvas', () => ({
   CityCanvas: (props: CityCanvasProps) => {
     cityProps = props;
-    useImperativeHandle(props.ref, () => ({ flyToPath }), []);
+    useImperativeHandle(props.ref, () => ({ flyToPath, flyToDistrict }), []);
     return <div data-testid="city" />;
   },
 }));
@@ -38,6 +39,7 @@ beforeEach(() => {
   cityProps = null;
   treemapProps = null;
   flyToPath.mockClear();
+  flyToDistrict.mockClear();
   webgl.ok = true;
 });
 afterEach(() => {
@@ -144,6 +146,48 @@ describe('Viewer', () => {
       'src/a.ts (single owner: Ada Lovelace (86%))',
     );
     expect(treemapProps?.tooltipText?.('docs/readme.md')).toBe('docs/readme.md');
+  });
+});
+
+const srcRow = () => document.querySelector<HTMLElement>('[data-path="src"]')!;
+
+describe('Viewer: folder list', () => {
+  it('lists the districts with file counts, collapsed inside the report card', () => {
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    const row = srcRow();
+    expect(row.closest('details')?.open).toBe(false);
+  });
+
+  it('hover tints the district in 3D and clears on leave', async () => {
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    const row = srcRow();
+    await userEvent.hover(row);
+    expect(cityProps?.highlightedDistrict).toBe('src');
+    await userEvent.unhover(row);
+    expect(cityProps?.highlightedDistrict).toBeNull();
+    expect(flyToDistrict).not.toHaveBeenCalled();
+  });
+
+  it('click keeps the tint and flies the camera; a second click clears it', async () => {
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    const row = srcRow();
+    await userEvent.click(row);
+    expect(flyToDistrict).toHaveBeenCalledWith('src');
+    expect(row.getAttribute('aria-pressed')).toBe('true');
+    await userEvent.unhover(row);
+    expect(cityProps?.highlightedDistrict).toBe('src');
+    await userEvent.click(row);
+    await userEvent.unhover(row);
+    expect(cityProps?.highlightedDistrict).toBeNull();
+  });
+
+  it('in 2D the treemap gets the paths and the tint, and a click does not fly', async () => {
+    render(<Viewer analysis={analysis} source="live" analysedAt={null} />);
+    await userEvent.click(screen.getByRole('button', { name: '2D' }));
+    await userEvent.click(srcRow());
+    expect(treemapProps?.districtPaths).toContain('src');
+    expect(treemapProps?.highlightedDistrict).toBe('src');
+    expect(flyToDistrict).not.toHaveBeenCalled();
   });
 });
 

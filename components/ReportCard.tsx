@@ -5,6 +5,8 @@ export interface ReportCardProps {
   report: Report;
   selectedPath: string | null;
   onSelect: (path: string) => void;
+  /** Extra sections rendered under the three lists (the folder list). */
+  children?: React.ReactNode;
 }
 
 const GROUPS: { key: keyof Report; title: string; hint: string }[] = [
@@ -24,7 +26,7 @@ function Path({ path }: { path: string }) {
 }
 
 /** The text-first equivalent of the canvas: files worth opening, as keyboard-selectable buttons. */
-export function ReportCard({ report, selectedPath, onSelect }: ReportCardProps) {
+export function ReportCard({ report, selectedPath, onSelect, children }: ReportCardProps) {
   return (
     <aside className={s.left} aria-label="Report card">
       <h2 className={s.panelTitle}>Report card</h2>
@@ -53,6 +55,7 @@ export function ReportCard({ report, selectedPath, onSelect }: ReportCardProps) 
           )}
         </section>
       ))}
+      {children}
     </aside>
   );
 }

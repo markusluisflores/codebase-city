@@ -239,6 +239,72 @@
   color: var(--muted);
 }
 
+/* Folder list: collapsed by default so the report card stays first on phones. */
+.folders {
+  margin-bottom: 18px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.foldersSummary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.foldersCount {
+  margin-left: 6px;
+  font:
+    12px var(--font-mono),
+    ui-monospace,
+    monospace;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.folderList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.folderRow {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 3px 6px;
+  text-align: left;
+  font:
+    13px var(--font-mono),
+    ui-monospace,
+    monospace;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.folderRow:hover,
+.folderRow[aria-pressed='true'] {
+  background: var(--bg);
+}
+
+.folderRow[aria-pressed='true'] {
+  box-shadow: inset 2px 0 var(--accent);
+}
+
+.folderName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.folderFiles {
+  flex: none;
+  color: var(--muted);
+}
+
 .facts {
   margin: 0;
   display: grid;
@@ -476,6 +542,8 @@
 
 .sheetButton:focus-visible,
 .entry:focus-visible,
+.folderRow:focus-visible,
+.foldersSummary:focus-visible,
 .toggle button:focus-visible,
 .link:focus-visible {
   outline: 2px solid var(--accent);

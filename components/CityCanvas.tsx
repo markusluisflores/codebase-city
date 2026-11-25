@@ -15,6 +15,8 @@ export interface CityHit {
 export interface CityCanvasHandle {
   /** Flies the camera to the building for `path` (jumps instead under reduced motion). */
   flyToPath(path: string): void;
+  /** Flies the camera to frame the district at `path` (jumps instead under reduced motion). */
+  flyToDistrict(path: string): void;
 }
 
 export interface CityCanvasProps {
@@ -26,6 +28,8 @@ export interface CityCanvasProps {
   arcs?: readonly Arc[];
   /** Districts to outline (single-owner). */
   badgedDistricts?: ReadonlySet<string>;
+  /** District path to tint on the floor (the folder list's hover or choice), or none. */
+  highlightedDistrict?: string | null;
   /** `null` when empty ground is clicked. */
   onSelect?: (hit: CityHit | null) => void;
   /** Text for the hover tooltip; return null for none. Defaults to the path. Rendered as text, cut to 200 characters. */
@@ -48,6 +52,7 @@ export function CityCanvas({
   selectedPath = null,
   arcs,
   badgedDistricts,
+  highlightedDistrict = null,
   onSelect,
   tooltipText,
   onError,
@@ -57,6 +62,7 @@ export function CityCanvas({
 }: CityCanvasProps) {
   const box = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const labels = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<CityScene | null>(null);
   const stats = useRef(new FrameStats());
   const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
@@ -80,6 +86,9 @@ export function CityCanvas({
       flyToPath(path) {
         const i = indexByPath.get(path);
         if (i !== undefined) sceneRef.current?.flyTo(i);
+      },
+      flyToDistrict(path) {
+        sceneRef.current?.flyToDistrict(path);
       },
     }),
     [indexByPath],
@@ -107,6 +116,7 @@ export function CityCanvas({
           latest.current.onSelect?.(h ? toHit(h) : null);
         },
         onFrame: (ms) => stats.current.push(ms),
+        labelRoot: labels.current ?? undefined,
       });
     } catch (error) {
       latest.current.onError?.(error);
@@ -137,6 +147,10 @@ export function CityCanvas({
   }, [badgedDistricts, layout]);
 
   useEffect(() => {
+    sceneRef.current?.setHighlightedDistrict(highlightedDistrict);
+  }, [highlightedDistrict, layout]);
+
+  useEffect(() => {
     sceneRef.current?.setArcs(arcs ?? []);
   }, [arcs, layout]);
 
@@ -164,6 +178,10 @@ export function CityCanvas({
         ref={canvas}
         aria-label="3D city of the repository's files"
         style={{ display: 'block', width: '100%', height: '100%', touchAction: 'none' }}
+      />
+      <div
+        ref={labels}
+        style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}
       />
       {tip ? <Tooltip text={tip.text} x={tip.x} y={tip.y} /> : null}
       {counting && summary ? (

@@ -6,12 +6,16 @@ import {
   DirectionalLight,
   EdgesGeometry,
   Float32BufferAttribute,
+  Group,
   InstancedBufferAttribute,
   InstancedMesh,
   LineBasicMaterial,
   LineSegments,
+  Mesh,
+  MeshBasicMaterial,
   MeshLambertMaterial,
   PerspectiveCamera,
+  PlaneGeometry,
   Raycaster,
   Scene,
   Vector2,
@@ -24,6 +28,14 @@ import { flyToMode } from '@/lib/a11y';
 import { arcSegments, type Arc } from './arcs';
 import { TOKENS } from './colours';
 import { buildingMatrices, cityRadius, plateMatrices } from './instances';
+import {
+  MAX_LABELS,
+  MIN_LABEL_HEIGHT,
+  MIN_LABEL_WIDTH,
+  chooseLabels,
+  isLabelDistrict,
+  type LabelCandidate,
+} from './labels';
 
 export type SceneHit = { kind: 'building'; index: number } | { kind: 'district'; index: number };
 
@@ -36,6 +48,11 @@ export interface SceneOptions {
   onFrame?: (ms: number) => void;
   /** Whether to skip animation; defaults to the `prefers-reduced-motion` media query. */
   prefersReducedMotion?: () => boolean;
+  /**
+   * Element (positioned, `pointer-events: none`) that receives the district name labels. They are
+   * decorative: the folder list and report card carry the same information as text.
+   */
+  labelRoot?: HTMLElement;
 }
 
 export interface CityScene {
@@ -49,6 +66,10 @@ export interface CityScene {
   setArcs(arcs: readonly Arc[]): void;
   /** Highlights a building, or none with `null`. */
   setSelected(index: number | null): void;
+  /** Tints one district on the floor (the folder list's hover or choice), or none with `null`. */
+  setHighlightedDistrict(path: string | null): void;
+  /** Moves the camera to frame a district (animated, or a jump under reduced motion). */
+  flyToDistrict(path: string): void;
   /** Moves the camera to frame a building: animated, or an instant jump under reduced motion. */
   flyTo(index: number): void;
   setSize(width: number, height: number): void;
@@ -62,6 +83,11 @@ const FLY_MS = 650;
 /** Sky blue: apart from every stop of the ember ramp, so an arc reads against any colour mode. */
 const ARC_COLOUR = '#7dd3fc';
 const CLICK_SLOP_PX = 5;
+const LABEL_FONT = '500 11px var(--font-mono), ui-monospace, monospace';
+/** Pixel width allowed per label character (11px Fira Code is about 6.6px wide). */
+const LABEL_CHAR_PX = 7;
+const LABEL_LINE_PX = 14;
+const FLOOR_Y = 0.05;
 
 const easeInOut = (t: number): number => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
@@ -105,6 +131,57 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
   const selection = new LineSegments(selectionEdges, selectionMaterial);
   selection.visible = false;
   scene.add(selection);
+
+  const highlight = new Group();
+  const highlightPlane = new Mesh(
+    new PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+    new MeshBasicMaterial({
+      color: new Color(TOKENS.accent),
+      transparent: true,
+      opacity: 0.3,
+      depthWrite: false,
+    }),
+  );
+  highlightPlane.position.y = FLOOR_Y + 0.01;
+  const squareGeometry = new BufferGeometry();
+  // Unit square outline on the floor, scaled to the district's width and depth.
+  // prettier-ignore
+  squareGeometry.setAttribute('position', new Float32BufferAttribute([
+    -0.5, 0, -0.5, 0.5, 0, -0.5, 0.5, 0, -0.5, 0.5, 0, 0.5,
+    0.5, 0, 0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, -0.5, 0, -0.5,
+  ], 3));
+  const highlightMaterial = new LineBasicMaterial({ color: new Color(TOKENS.text) });
+  const highlightEdge = new LineSegments(squareGeometry, highlightMaterial);
+  highlightEdge.position.y = FLOOR_Y + 0.02;
+  highlight.add(highlightPlane, highlightEdge);
+  highlight.visible = false;
+  scene.add(highlight);
+
+  // Name labels: a small pool of DOM elements, moved after each rendered frame. Text is set with
+  // textContent only (repo-derived strings never reach innerHTML).
+  const labelEls: HTMLElement[] = [];
+  let labelCandidates: { path: string; corners: Vector3[] }[] = [];
+  const labelRoot = options.labelRoot;
+  if (labelRoot) {
+    labelRoot.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < MAX_LABELS; i++) {
+      const el = document.createElement('div');
+      Object.assign(el.style, {
+        position: 'absolute',
+        left: '0',
+        top: '0',
+        display: 'none',
+        whiteSpace: 'nowrap',
+        pointerEvents: 'none',
+        font: LABEL_FONT,
+        lineHeight: `${LABEL_LINE_PX}px`,
+        color: TOKENS.text,
+        textShadow: `0 0 3px ${TOKENS.bg}, 0 0 3px ${TOKENS.bg}, 0 1px 2px ${TOKENS.bg}`,
+      });
+      labelRoot.appendChild(el);
+      labelEls.push(el);
+    }
+  }
 
   let layout: CityLayout = { buildings: [], districts: [] };
   let buildings: InstancedMesh | null = null;
@@ -192,6 +269,58 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
     dirty = true;
   });
 
+  const scratch = new Vector3();
+  function updateLabels(): void {
+    if (!labelRoot) return;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    const candidates: LabelCandidate[] = [];
+    camera.updateMatrixWorld();
+    outer: for (const c of labelCandidates) {
+      let x0 = Infinity;
+      let y0 = Infinity;
+      let x1 = -Infinity;
+      let y1 = -Infinity;
+      for (const corner of c.corners) {
+        scratch.copy(corner).applyMatrix4(camera.matrixWorldInverse);
+        // A corner behind the camera would mis-project: skip the district instead.
+        if (scratch.z >= -camera.near) continue outer;
+        scratch.copy(corner).project(camera);
+        const px = ((scratch.x + 1) / 2) * width;
+        const py = ((1 - scratch.y) / 2) * height;
+        x0 = Math.min(x0, px);
+        y0 = Math.min(y0, py);
+        x1 = Math.max(x1, px);
+        y1 = Math.max(y1, py);
+      }
+      // Clamp to the viewport so a district larger than the screen is labelled where it can be seen.
+      x0 = Math.max(0, x0);
+      y0 = Math.max(0, y0);
+      x1 = Math.min(width, x1);
+      y1 = Math.min(height, y1);
+      if (x1 <= x0 || y1 <= y0) continue;
+      candidates.push({ path: c.path, x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+    }
+    const placed = chooseLabels(candidates, {
+      minWidth: MIN_LABEL_WIDTH,
+      minHeight: MIN_LABEL_HEIGHT,
+      charWidth: LABEL_CHAR_PX,
+      lineHeight: LABEL_LINE_PX,
+      anchor: 'centre',
+    });
+    labelEls.forEach((el, i) => {
+      const l = placed[i];
+      if (!l) {
+        el.style.display = 'none';
+        return;
+      }
+      if (el.textContent !== l.text) el.textContent = l.text;
+      el.style.display = 'block';
+      el.style.opacity = String(l.opacity);
+      el.style.transform = `translate(${Math.round(l.x)}px, ${Math.round(l.y)}px) translate(-50%, -50%)`;
+    });
+  }
+
   function tick(now: number): void {
     if (disposed) return;
     if (fly) {
@@ -212,6 +341,7 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
     if (moved || dirty || continuous || controls.autoRotate) {
       dirty = false;
       renderer.render(scene, camera);
+      updateLabels();
       // Frame times are only meaningful while frames render back to back.
       if (lastTime !== 0) options.onFrame?.(now - lastTime);
     }
@@ -228,6 +358,29 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
     camera.far = radius * 20;
     camera.updateProjectionMatrix();
     controls.update();
+  }
+
+  /** Animated move (or an instant jump under reduced motion) to look at `toTarget` from `distance`. */
+  function flyToward(toTarget: Vector3, distance: number): void {
+    const dir = camera.position.clone().sub(controls.target);
+    if (dir.lengthSq() < 1e-6) dir.set(1, 1, 1);
+    const toPos = toTarget
+      .clone()
+      .add(dir.normalize().multiplyScalar(Math.min(controls.maxDistance, distance)));
+    if (flyToMode(reducedMotion()) === 'jump') {
+      camera.position.copy(toPos);
+      controls.target.copy(toTarget);
+      controls.update();
+      dirty = true;
+      return;
+    }
+    fly = {
+      start: performance.now(),
+      fromPos: camera.position.clone(),
+      toPos,
+      fromTarget: controls.target.clone(),
+      toTarget,
+    };
   }
 
   function applyColours(colours: readonly string[]): void {
@@ -296,6 +449,19 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
         plates.computeBoundingSphere();
         scene.add(plates);
       }
+      highlight.visible = false;
+      const all = next.districts.map((d) => d.path);
+      labelCandidates = next.districts
+        .filter((d) => isLabelDistrict(d.path, all))
+        .map((d) => ({
+          path: d.path,
+          corners: [
+            new Vector3(d.x - d.w / 2, FLOOR_Y, d.z - d.d / 2),
+            new Vector3(d.x + d.w / 2, FLOOR_Y, d.z - d.d / 2),
+            new Vector3(d.x + d.w / 2, FLOOR_Y, d.z + d.d / 2),
+            new Vector3(d.x - d.w / 2, FLOOR_Y, d.z + d.d / 2),
+          ],
+        }));
       applyColours(colours);
       frameCity();
       dirty = true;
@@ -373,28 +539,24 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
     flyTo(index) {
       const b = layout.buildings[index];
       if (!b) return;
-      const toTarget = new Vector3(b.x, b.height / 2, b.z);
-      const dir = camera.position.clone().sub(controls.target);
-      if (dir.lengthSq() < 1e-6) dir.set(1, 1, 1);
-      const distance = Math.min(
-        controls.maxDistance,
+      flyToward(
+        new Vector3(b.x, b.height / 2, b.z),
         Math.max(controls.minDistance, b.footprint * 12, 8),
       );
-      const toPos = toTarget.clone().add(dir.normalize().multiplyScalar(distance));
-      if (flyToMode(reducedMotion()) === 'jump') {
-        camera.position.copy(toPos);
-        controls.target.copy(toTarget);
-        controls.update();
-        dirty = true;
-        return;
+    },
+    flyToDistrict(path) {
+      const d = layout.districts.find((x) => x.path === path);
+      if (!d) return;
+      flyToward(new Vector3(d.x, 0, d.z), Math.max(controls.minDistance, Math.max(d.w, d.d) * 1.6));
+    },
+    setHighlightedDistrict(path) {
+      const d = path === null ? undefined : layout.districts.find((x) => x.path === path);
+      highlight.visible = d !== undefined;
+      if (d) {
+        highlight.position.set(d.x, 0, d.z);
+        highlight.scale.set(d.w, 1, d.d);
       }
-      fly = {
-        start: performance.now(),
-        fromPos: camera.position.clone(),
-        toPos,
-        fromTarget: controls.target.clone(),
-        toTarget,
-      };
+      dirty = true;
     },
     setSize(width, height) {
       const w = Math.max(1, Math.floor(width));
@@ -424,6 +586,12 @@ export function createCityScene(canvas: HTMLCanvasElement, options: SceneOptions
       removeMesh(outlines);
       removeMesh(arcLines);
       scene.remove(selection);
+      scene.remove(highlight);
+      highlightPlane.geometry.dispose();
+      (highlightPlane.material as MeshBasicMaterial).dispose();
+      squareGeometry.dispose();
+      highlightMaterial.dispose();
+      for (const el of labelEls) el.remove();
       unitBox.dispose();
       buildingGeometry.dispose();
       selectionEdges.dispose();
