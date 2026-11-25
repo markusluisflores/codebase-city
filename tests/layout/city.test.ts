@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { MAX_HEIGHT, MIN_HEIGHT, cityLayout } from '@/lib/layout/city';
+import { MAX_HEIGHT, MIN_CELL, MIN_HEIGHT, cityLayout } from '@/lib/layout/city';
 
 interface F {
   path: string;
@@ -344,5 +346,86 @@ describe('cityLayout', () => {
     const start = performance.now();
     cityLayout(input);
     expect(performance.now() - start).toBeLessThan(3000);
+  });
+});
+
+describe('world-unit scale (a narrow district must not collapse the cell)', () => {
+  /** One huge folder beside many one-file folders: the squarified leftover is a hair-thin sliver. */
+  function cargoLike(): F[] {
+    const files: F[] = [];
+    for (let i = 0; i < 2800; i++)
+      files.push({ path: `tests/testsuite/t${i % 40}/f${i}.rs`, size: 1 + (i % 500) });
+    for (let i = 0; i < 300; i++)
+      files.push({ path: `src/cargo/mod${i % 12}/f${i}.rs`, size: 100 + i });
+    for (const lone of [
+      'tests/build-std/a.rs',
+      'etc/man/b.txt',
+      '.cargo/config.toml',
+      'ci/c.sh',
+      'credential/d.rs',
+    ])
+      files.push({ path: lone, size: 50 });
+    return files;
+  }
+  const floorWidth = (l: Layout): number =>
+    2 *
+    Math.max(
+      ...l.districts.map((d) => Math.abs(d.x) + d.w / 2),
+      ...l.districts.map((d) => Math.abs(d.z) + d.d / 2),
+    );
+  const maxFoot = (l: Layout): number => Math.max(...l.buildings.map((b) => b.footprint));
+  const minFoot = (l: Layout): number => Math.min(...l.buildings.map((b) => b.footprint));
+  const tallest = (l: Layout): number => Math.max(...l.buildings.map((b) => b.height));
+
+  function expectReadableAndSound(l: Layout): void {
+    const floor = floorWidth(l);
+    const half = floor / 2;
+    // Footprint is a sensible fraction of the floor; the skyline reads against it.
+    expect(minFoot(l) / floor).toBeGreaterThan(0.003);
+    expect(tallest(l) / floor).toBeGreaterThan(0.03);
+    expect(minFoot(l)).toBeGreaterThanOrEqual(MIN_CELL * 0.8 - EPS);
+    // Nothing leaves the plate, and nothing overlaps.
+    for (const b of l.buildings) {
+      expect(Math.abs(b.x) + b.footprint / 2).toBeLessThanOrEqual(half + EPS);
+      expect(Math.abs(b.z) + b.footprint / 2).toBeLessThanOrEqual(half + EPS);
+    }
+    const sorted = [...l.buildings].sort((a, b) => a.x - b.x);
+    for (let i = 0; i < sorted.length; i++) {
+      for (let j = i + 1; j < sorted.length; j++) {
+        const a = sorted[i]!;
+        const b = sorted[j]!;
+        if (b.x - a.x >= (a.footprint + b.footprint) / 2 - EPS) break;
+        const apart = Math.abs(a.z - b.z) >= (a.footprint + b.footprint) / 2 - EPS;
+        if (!apart) throw new Error(`overlap: ${a.path} / ${b.path}`);
+      }
+    }
+  }
+
+  it('keeps a cargo-like city readable in world units', () => {
+    const l = cityLayout(cargoLike());
+    expect(maxFoot(l)).toBeGreaterThan(0.5);
+    expectReadableAndSound(l);
+  });
+
+  it('keeps the real rust-lang/cargo gallery file readable in world units', () => {
+    const a = JSON.parse(
+      readFileSync(join(process.cwd(), 'public/gallery/rust-lang__cargo.json'), 'utf8'),
+    ) as { files: F[] };
+    const l = cityLayout(a.files.map((f) => ({ path: f.path, size: f.size })));
+    expect(maxFoot(l)).toBeGreaterThan(0.5);
+    expectReadableAndSound(l);
+  });
+
+  it('never shrinks the shared cell below MIN_CELL for a list with narrow districts', () => {
+    const files: F[] = [];
+    for (let k = 0; k < 40; k++) files.push({ path: `d${k}/only.ts`, size: 5 });
+    for (let i = 0; i < 4000; i++)
+      files.push({ path: `big/sub${i % 3}/f${i}.ts`, size: 1 + (i % 50) });
+    expectReadableAndSound(cityLayout(files));
+  });
+
+  it('does not collapse the cell on a small ordinary repo', () => {
+    const l = cityLayout(bigCity(60));
+    expect(maxFoot(l)).toBeGreaterThanOrEqual(MIN_CELL * 0.8);
   });
 });
