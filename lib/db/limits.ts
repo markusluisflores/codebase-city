@@ -73,6 +73,107 @@ export async function releaseQuota(reservedOn: string): Promise<void> {
   );
 }
 
+// ---- Analyze limits (per IP and global), kept in `usage_counters` with fixed UTC windows. -------------
+// The session cookie is a stateless timestamp that anyone with the password can mint again, so it cannot
+// identify a holder; the limits key on the platform-set client IP (hashed) and on a global backstop.
+
+/** GitHub lookups a UTC hour (each costs 3 GitHub API calls, cached results included). */
+export const LOOKUP_LIMIT_PER_IP_HOUR = 20;
+export const LOOKUP_LIMIT_GLOBAL_HOUR = 400;
+/** New live analyses a UTC day for one client IP (the global daily cap stays 10). */
+export const ANALYSIS_LIMIT_PER_IP_DAY = 5;
+
+/** `HMAC(secret, "limit-ip:" + ip)` as hex: its own domain, so it never matches a login-attempt hash. */
+export function ipLimitKey(secret: string, ip: string): string {
+  return createHmac('sha256', secret).update(`limit-ip:${ip}`).digest('hex');
+}
+
+/** Whole seconds until the next UTC hour (at least 1). */
+export function secondsToNextHour(now: Date): number {
+  const next = Math.floor(now.getTime() / 3_600_000 + 1) * 3_600_000;
+  return Math.max(1, Math.ceil((next - now.getTime()) / 1000));
+}
+
+/** Whole seconds until the next UTC midnight (at least 1). */
+export function secondsToNextUtcDay(now: Date): number {
+  const next = Math.floor(now.getTime() / 86_400_000 + 1) * 86_400_000;
+  return Math.max(1, Math.ceil((next - now.getTime()) / 1000));
+}
+
+const hourStamp = (now: Date): string => now.toISOString().slice(0, 13); // 2026-11-16T12
+const IP_KEY_RE = /^[0-9a-f]{64}$/;
+const checkIpKey = (key: string): string => {
+  if (!IP_KEY_RE.test(key)) throw new Error('invalid ip key');
+  return key;
+};
+
+const GIVE_BACK = `UPDATE usage_counters SET count = GREATEST(count - 1, 0) WHERE period = $1`;
+
+/**
+ * Takes one GitHub lookup for this IP and one global one, for the UTC hour of `now`. The per-IP counter
+ * is taken first; if the global ceiling then refuses, the per-IP unit goes back, so a refusal costs
+ * nothing. Both increments are single conditional upserts (atomic under concurrency). Counters from past
+ * hours are purged here. A throw means the caller must deny.
+ */
+export async function takeLookup(
+  ipKey: string,
+  now: Date,
+): Promise<{ ok: true } | { ok: false; retryAfterS: number }> {
+  const db = getDb();
+  const hour = hourStamp(now);
+  const perIp = `lk:${hour}:ip:${checkIpKey(ipKey)}`;
+  const global = `lk:${hour}:g`;
+  const refused = { ok: false, retryAfterS: secondsToNextHour(now) } as const;
+  await db
+    .query(`DELETE FROM usage_counters WHERE period LIKE 'lk:%' AND period < $1`, [`lk:${hour}`])
+    .catch(() => undefined);
+  if ((await db.query(TAKE_UNIT, [perIp, LOOKUP_LIMIT_PER_IP_HOUR])).length === 0) return refused;
+  let taken: unknown[];
+  try {
+    taken = await db.query(TAKE_UNIT, [global, LOOKUP_LIMIT_GLOBAL_HOUR]);
+  } catch (err) {
+    await db.query(GIVE_BACK, [perIp]).catch(() => undefined);
+    throw err;
+  }
+  if (taken.length === 0) {
+    await db.query(GIVE_BACK, [perIp]);
+    return refused;
+  }
+  return { ok: true };
+}
+
+/** The per-IP daily analysis counter key for a UTC date and a hashed IP. */
+export function ipAnalysisPeriod(day: string, ipKey: string): string {
+  if (!DATE_RE.test(day)) throw new Error('invalid quota date');
+  return `an:${day}:ip:${checkIpKey(ipKey)}`;
+}
+
+/**
+ * Takes one of this IP's live analyses for the UTC day of `now`, and says how many are left today.
+ * Conditional upsert, atomic. Counters from earlier days are purged here. A throw means the caller must deny.
+ */
+export async function takeIpAnalysis(
+  ipKey: string,
+  now: Date,
+): Promise<{ ok: true; left: number } | { ok: false; retryAfterS: number }> {
+  const db = getDb();
+  const day = utcDay(now);
+  await db
+    .query(`DELETE FROM usage_counters WHERE period LIKE 'an:%' AND period < $1`, [`an:${day}`])
+    .catch(() => undefined);
+  const rows = await db.query<{ count: number | string }>(TAKE_UNIT, [
+    ipAnalysisPeriod(day, ipKey),
+    ANALYSIS_LIMIT_PER_IP_DAY,
+  ]);
+  if (rows.length === 0) return { ok: false, retryAfterS: secondsToNextUtcDay(now) };
+  return { ok: true, left: Math.max(ANALYSIS_LIMIT_PER_IP_DAY - Number(rows[0]?.count ?? 0), 0) };
+}
+
+/** Gives back one per-IP analysis against the reservation's own UTC date (not the time of the release). */
+export async function releaseIpAnalysis(reservedOn: string, ipKey: string): Promise<void> {
+  await getDb().query(GIVE_BACK, [ipAnalysisPeriod(reservedOn, ipKey)]);
+}
+
 const LOGIN_WINDOW_MS = 60_000;
 const LOGIN_RETENTION_MS = 60 * 60_000;
 const LOGIN_MAX_PER_WINDOW = 5;

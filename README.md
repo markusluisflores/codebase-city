@@ -59,7 +59,7 @@ Full design: `docs/superpowers/specs/2026-11-13-codebase-city-design.md`. Archit
 - **A 24-month window.** Churn and bug-fix counts cover the 24 months before the repo's latest commit. Files with no commit in the window stay in the city as "no activity in window" or "older than window".
 - **Language by extension and size.** The language colour is picked from extensions, so some repos get a surprising top language (the vite card reads "Image" because of image bytes).
 - **Caps.** Live analyses reject repos over 1 GB (GitHub size), over 50,000 total commits, over 20,000 commits in the window, over 10,000 files, a truncated GitHub tree, or a run over 240 s. The city shows at most 5,000 buildings; smaller files in a folder merge into one "other" building. For example `react/react` is about 1.1 GB on GitHub, so it is over the 1 GB cap and is not in the gallery.
-- **The password gate is a single shared secret.** It stops casual use and bounds cost; it is not per-user authentication. Wrong guesses are limited to 5 a minute per IP and live analyses are capped globally.
+- **The password gate is a single shared secret.** It stops casual use and bounds cost; it is not per-user authentication. Wrong guesses are limited to 5 a minute per IP. Live analyses are capped globally (10 a day, 60 a month), per client IP (5 a day), and GitHub lookups are capped per IP (20 an hour) and globally (400 an hour). The session cookie cannot identify a holder (anyone with the password can mint another), so the limits key on the IP.
 - **Sandbox runtime.** The job runs on a Vercel Sandbox: its network policy allows only GitHub hosts, but the policy was only verified with `curl` and a clone under the policy was not separately tested. Sandbox CPU time per job was not measured, so the daily and monthly caps are estimates.
 - **Hand checks still owed:** touch gestures on a real phone, screen-reader pass, reduced-motion pass, and a colour-vision-deficiency pass on all six colour modes.
 
@@ -76,6 +76,5 @@ Authors are shown by display name and a key. The key is the first 12 hex charact
 - The legend covers about 45% of a phone screen; make it collapsible.
 - Two greys (others and no activity) look alike under achromatopsia.
 - Dependabot ignore rule for `@types/node` majors; TypeScript 7 is held until typescript-eslint supports it; ESLint 9 is deprecated, plan the move.
-- Per-session limit on `POST /api/analyze`: GitHub calls happen before the quota check, so someone with the password could use up the GitHub token's hourly limit.
 - After the first production deploy, probe that a spoofed `x-vercel-forwarded-for` header cannot defeat the login limit (the header's platform behaviour is still unverified).
 - Time slider over history (out of v1 scope).
