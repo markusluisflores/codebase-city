@@ -21,8 +21,8 @@ describe('fitLabel', () => {
   it('cuts a long segment with an ellipsis', () => {
     expect(fitLabel('testsuite', 6 * CHAR, CHAR)).toBe('tests…');
   });
-  it('returns null when fewer than 4 characters fit', () => {
-    expect(fitLabel('testsuite', 3 * CHAR, CHAR)).toBeNull();
+  it('returns null when fewer than 6 characters fit', () => {
+    expect(fitLabel('testsuite', 5 * CHAR, CHAR)).toBeNull();
   });
 });
 

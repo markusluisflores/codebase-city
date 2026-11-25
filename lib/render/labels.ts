@@ -6,7 +6,7 @@ export const MIN_LABEL_WIDTH = 60;
 export const MIN_LABEL_HEIGHT = 16;
 
 const FILES = '(files)';
-const MIN_CHARS = 4;
+const MIN_CHARS = 6;
 
 /** A district's rectangle on screen, in canvas pixels. */
 export interface LabelCandidate {
