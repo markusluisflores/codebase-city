@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cityLayout } from '@/lib/layout/city';
+import { MAX_HEIGHT, MIN_HEIGHT, cityLayout } from '@/lib/layout/city';
 
 interface F {
   path: string;
@@ -181,6 +181,68 @@ describe('cityLayout', () => {
       2,
       6,
     );
+  });
+
+  describe('height scale with an outlier file', () => {
+    const cell = (l: Layout): number => l.buildings[0]!.footprint / 0.8;
+    const heightsInCells = (l: Layout): number[] => l.buildings.map((b) => b.height / cell(l));
+    // Cargo-like: 3,000 small files (a few hundred bytes to ~50 KB) plus one 2.4 MB blob.
+    const cargoLike = (): F[] => [
+      ...Array.from({ length: 3000 }, (_, i) => ({
+        path: `d${i % 20}/f${i}.rs`,
+        size: 100 + ((i * 7919) % 20_000),
+      })),
+      { path: 'benches/blob.txt', size: 2_449_408 },
+    ];
+
+    it('does not flatten typical buildings: the median is well above the minimum height', () => {
+      const hs = heightsInCells(cityLayout(cargoLike())).sort((a, b) => a - b);
+      expect(hs[Math.floor(hs.length / 2)]!).toBeGreaterThan(MIN_HEIGHT * 3);
+    });
+
+    it('draws the outlier and every file above the reference at exactly the maximum height', () => {
+      const l = cityLayout(cargoLike());
+      const hs = heightsInCells(l);
+      const blob = l.buildings.find((b) => b.path === 'benches/blob.txt')!;
+      expect(blob.height / cell(l)).toBeCloseTo(MAX_HEIGHT, 9);
+      expect(Math.max(...hs)).toBeLessThanOrEqual(MAX_HEIGHT + 1e-9);
+      expect(hs.filter((h) => Math.abs(h - MAX_HEIGHT) < 1e-9).length).toBeGreaterThan(1);
+    });
+
+    it('is unaffected by how large the outlier is', () => {
+      const small = cargoLike();
+      const huge = cargoLike().map((f) =>
+        f.path === 'benches/blob.txt' ? { ...f, size: 1e12 } : f,
+      );
+      const a = cityLayout(small).buildings.filter((b) => b.path !== 'benches/blob.txt');
+      const b = cityLayout(huge).buildings.filter((b) => b.path !== 'benches/blob.txt');
+      expect(b.map((x) => x.height)).toEqual(a.map((x) => x.height));
+    });
+
+    it('clamps height to the maximum and never goes below the minimum', () => {
+      const l = cityLayout(cargoLike());
+      for (const h of heightsInCells(l)) {
+        expect(h).toBeGreaterThanOrEqual(MIN_HEIGHT - 1e-9);
+        expect(h).toBeLessThanOrEqual(MAX_HEIGHT + 1e-9);
+      }
+    });
+
+    it('lets a lone large file among zero-size files reach the maximum height', () => {
+      const input = [
+        ...Array.from({ length: 99 }, (_, i) => ({ path: `a/z${i}.txt`, size: 0 })),
+        { path: 'a/big.txt', size: 5000 },
+      ];
+      const l = cityLayout(input);
+      const big = l.buildings.find((b) => b.path === 'a/big.txt')!;
+      expect(big.height / cell(l)).toBeCloseTo(MAX_HEIGHT, 9);
+    });
+
+    it('gives all-zero and single-file cities finite heights', () => {
+      const zeros = cityLayout(Array.from({ length: 5 }, (_, i) => ({ path: `a/z${i}`, size: 0 })));
+      for (const h of heightsInCells(zeros)) expect(h).toBeCloseTo(MIN_HEIGHT, 9);
+      const one = cityLayout([{ path: 'a/only.ts', size: 123 }]);
+      expect(one.buildings[0]!.height / cell(one)).toBeCloseTo(MAX_HEIGHT, 9);
+    });
   });
 
   it('gives zero, negative and NaN sizes a finite positive height', () => {
