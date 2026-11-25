@@ -203,6 +203,30 @@ describe('live cards in Postgres', () => {
     expect(await backfillCards(5)).toBe(0);
   });
 
+  it('backfill leaves card NULL after a database error, then fills the row on the next call', async () => {
+    await putCached(sampleAnalysis('a', 'flaky'), new Date('2026-11-01T00:00:00Z'));
+    await t.pg.exec('UPDATE analyses SET card = NULL');
+    const real = pgAdapter(t.pg);
+    let failed = false;
+    setDb({
+      query: async (text, params) => {
+        if (!failed && text.includes('SELECT analysis')) {
+          failed = true;
+          throw new Error('transient database error');
+        }
+        return real.query(text, params);
+      },
+    });
+    expect(await backfillCards(5)).toBe(0);
+    expect(failed).toBe(true);
+    const after = await t.pg.query<{ card: unknown }>(
+      `SELECT card FROM analyses WHERE name = 'flaky'`,
+    );
+    expect(after.rows[0]!.card).toBeNull();
+    expect(await backfillCards(5)).toBe(1);
+    expect((await listLiveCards(24)).map((c) => c.name)).toEqual(['flaky']);
+  });
+
   it('a failed card write on a re-analysis clears the old card instead of keeping it', async () => {
     await putCached(sampleAnalysis('a', 'x'), new Date('2026-11-01T00:00:00Z'));
     const real = pgAdapter(t.pg);

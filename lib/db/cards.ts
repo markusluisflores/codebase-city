@@ -29,11 +29,13 @@ export async function listLiveCards(limit: number): Promise<GalleryCard[]> {
  * existed, or whose card write failed). Each one reads a full analysis, so the count is small and the
  * home page's revalidation interval spreads the rest over later renders. Returns how many it filled.
  *
- * One row never aborts the loop. A row that cannot produce a card (it no longer parses, or the card
- * fails to build or store) gets the sentinel card `{}` so it is no longer `card IS NULL` and is not
- * re-read on every render; `listLiveCards` skips it because `parseCard` rejects `{}`. The sentinel
- * write is best effort and its own failure is swallowed. A later successful re-analysis overwrites
- * the sentinel through `putCached`'s card write. Only rows that really got a card are counted.
+ * One row never aborts the loop. A row that definitely cannot produce a card (its analysis no longer
+ * parses, or `galleryCard` throws on it) gets the sentinel card `{}` so it is no longer `card IS NULL`
+ * and is not re-read on every render; `listLiveCards` skips it because `parseCard` rejects `{}`. A
+ * database error (reading the analysis or storing the card) may be transient, so it writes no sentinel:
+ * the card stays NULL and a later render retries. The sentinel write is best effort and its own
+ * failure is swallowed. A later successful re-analysis overwrites the sentinel through `putCached`'s
+ * card write. Only rows that really got a card are counted.
  */
 export async function backfillCards(limit: number): Promise<number> {
   const rows = await getDb().query<{ owner: string; name: string }>(
@@ -45,12 +47,21 @@ export async function backfillCards(limit: number): Promise<number> {
   );
   let filled = 0;
   for (const { owner, name } of rows) {
+    let hit;
     try {
-      const hit = await getCached(owner, name, SCHEMA_VERSION);
-      if (!hit) throw new Error('analysis row does not parse');
-      await putCard(owner, name, SCHEMA_VERSION, galleryCard(hit.analysis, hit.analysedAt));
-      filled++;
+      hit = await getCached(owner, name, SCHEMA_VERSION);
     } catch {
+      continue; // Database error, possibly transient: leave card NULL so a later render retries.
+    }
+    let built: GalleryCard | null = null;
+    if (hit) {
+      try {
+        built = galleryCard(hit.analysis, hit.analysedAt);
+      } catch {
+        built = null;
+      }
+    }
+    if (!built) {
       try {
         await getDb().query(
           `UPDATE analyses SET card = '{}'::jsonb WHERE owner = $1 AND name = $2 AND schema_version = $3`,
@@ -59,6 +70,13 @@ export async function backfillCards(limit: number): Promise<number> {
       } catch {
         // Best effort: the row stays card-less and is retried on a later render.
       }
+      continue;
+    }
+    try {
+      await putCard(owner, name, SCHEMA_VERSION, built);
+      filled++;
+    } catch {
+      // Database error, possibly transient: leave card NULL so a later render retries.
     }
   }
   return filled;
