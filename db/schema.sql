@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 CREATE INDEX IF NOT EXISTS login_attempts_ip_ts ON login_attempts (ip_hash, ts);
 CREATE INDEX IF NOT EXISTS login_attempts_ts ON login_attempts (ts);
 
--- Home-page gallery card (name, language, day, thumbnail rectangles; about 10 KB), so the home page lists
+-- Home-page gallery card (name, language, day, thumbnail rectangles; under 20 KB), so the home page lists
 -- live analyses without reading each row's analysis (up to 8 MB of jsonb). Written best-effort after the
 -- row; a NULL card is filled in by the home page (lib/db/cards.ts). Safe to apply before the code ships.
 ALTER TABLE analyses ADD COLUMN IF NOT EXISTS card jsonb;

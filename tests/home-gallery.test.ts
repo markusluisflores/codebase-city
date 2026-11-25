@@ -3,7 +3,15 @@ import { setDb } from '@/lib/db/client';
 import { backfillCards, listLiveCards } from '@/lib/db/cards';
 import { putCached, putCard } from '@/lib/db/cache';
 import { SCHEMA_VERSION } from '@/lib/analysis/schema';
-import { galleryCard, parseCard, type GalleryCard } from '@/lib/gallery-cards';
+import {
+  THUMB_H,
+  THUMB_MAX_RECTS,
+  THUMB_W,
+  galleryCard,
+  parseCard,
+  type GalleryCard,
+} from '@/lib/gallery-cards';
+import { treemap2D } from '@/lib/layout/treemap';
 import { HOME_CARD_CAP, loadHomeCards, mergeCards } from '@/lib/home-gallery';
 import { pgAdapter, useTestDb } from './helpers/pgliteDb';
 import { sampleAnalysis } from './helpers/sampleAnalysis';
@@ -107,12 +115,21 @@ describe('loadHomeCards', () => {
 
   it('skips the database when the curated set alone fills the cap', async () => {
     const many = Array.from({ length: HOME_CARD_CAP + 3 }, (_, i) => card('c', `r${i}`, false));
+    let liveCalled = false;
+    let backfillCalled = false;
     const out = await loadHomeCards({
       curated: async () => many,
       live: async () => {
-        throw new Error('must not be called');
+        liveCalled = true;
+        return [];
+      },
+      backfill: async () => {
+        backfillCalled = true;
+        return 0;
       },
     });
+    expect(liveCalled).toBe(false);
+    expect(backfillCalled).toBe(false);
     expect(out).toHaveLength(HOME_CARD_CAP);
   });
 });
@@ -133,6 +150,30 @@ describe('card mapping', () => {
     const c = galleryCard(sampleAnalysis());
     expect(c.live).toBe(false);
     expect(c.analysedOn).toBe('2024-03-09');
+  });
+
+  it('keeps the largest rects of a many-directory layout, in their original order', () => {
+    const a = sampleAnalysis('many', 'big');
+    a.files = Array.from({ length: 800 }, (_, i) => ({
+      ...a.files[0]!,
+      path: `d${i % 400}/f${i}.ts`,
+      size: i % 97 === 0 ? 5_000_000 : 100 + (i % 50),
+    }));
+    const all = treemap2D(a.files, THUMB_W, THUMB_H, THUMB_MAX_RECTS);
+    expect(all.length).toBeGreaterThan(THUMB_MAX_RECTS);
+    const round = (n: number) => Math.round(n * 10) / 10;
+    const keep = new Set(
+      all
+        .map((r, i) => ({ i, area: r.w * r.h }))
+        .sort((x, y) => y.area - x.area || x.i - y.i)
+        .slice(0, THUMB_MAX_RECTS)
+        .map((e) => e.i),
+    );
+    const expected = all
+      .filter((_, i) => keep.has(i))
+      .map((r) => ({ x: round(r.x), y: round(r.y), w: round(r.w), h: round(r.h) }));
+    const c = galleryCard(a, new Date('2026-11-20T00:00:00Z'));
+    expect(c.rects.map(({ x, y, w, h }) => ({ x, y, w, h }))).toEqual(expected);
   });
 
   it('parseCard accepts its own output and rejects malformed ones', () => {
