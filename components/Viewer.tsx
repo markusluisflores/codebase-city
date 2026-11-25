@@ -90,10 +90,14 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
         return;
       }
       setChosenFolder(path);
-      setSheetOpen(false); // On phones the sheet would cover the district the camera flies to.
+      // On phones the sheet would cover the district the camera flies to; focus follows it out.
+      if (sheetOpen) {
+        setSheetOpen(false);
+        sheetButton.current?.focus();
+      }
       if (view === '3d' && !noWebGL) city.current?.flyToDistrict(path);
     },
-    [chosenFolder, view, noWebGL],
+    [chosenFolder, view, noWebGL, sheetOpen],
   );
 
   const colourOf = useCallback(
