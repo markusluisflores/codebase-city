@@ -1,7 +1,7 @@
 # Codebase City: Interview Guide
 
 **Last updated:** 2026-11-25
-**Last plan covered:** `docs/superpowers/plans/2026-11-13-codebase-city.md`, Tasks 0 to 16, all merged (viewer PR 19 and PR 20, gallery and packaging PR 21), plus the two post-launch fixes PR 26 (height scale) and PR 27 (layout cell). Production is live at <https://codebase-city-spike.vercel.app>. Sections 1 to 6 below were first written on 2026-11-18; entries 7 to 11, the process and bug sections were added on 2026-11-25 from the executor notes and PRs.
+**Last plan covered:** `docs/superpowers/plans/2026-11-13-codebase-city.md`, Tasks 0 to 16, all merged (viewer PR 19 and PR 20, gallery and packaging PR 21), plus the two post-launch fixes PR 26 (height scale) and PR 27 (layout cell). Production is live at <https://codebase-city-spike.vercel.app>. Sections 1 to 6 below were first written on 2026-11-18; entries 7 to 12, the process and bug sections were added on 2026-11-25 from the executor notes and PRs.
 
 Everything here is drawn from the project's own artifacts: `docs/requirements-seed.md`, `docs/adr/ADR-001-host-on-vercel.md`, and the 2026-11-13 design conversation. Claims from web sources are marked **verified** (read on the vendor's own page or measured by us), **secondary** (a blog or aggregator) or **unverified**. Re-check any of them before quoting a number in an interview.
 
@@ -34,7 +34,7 @@ Paste a public GitHub repo URL and get a 3D city plus a 2D treemap of its files,
 
 ## Future improvements and known limits
 
-Markus's first-use feedback on the PR 19 preview (2026-11-18, "works well, likes it") produced the first three items; as of 2026-11-25 each is in design or build in its own branch and none has merged.
+Markus's first-use feedback on the PR 19 preview (2026-11-18, "works well, likes it") produced the first three items below (gallery, labels, password flow); as of 2026-11-25 each of those is in design or build in its own branch and none has merged. Re-analyse was a separate decision, deferred by Markus on 2026-11-18.
 
 * Re-analyse a cached repo behind the password (deferred by Markus, 2026-11-18).
 * Show analysed repos in the home gallery (they are in the database cache but not listed).
@@ -80,7 +80,7 @@ The Vercel design is **B-shaped (ADR-001 calls it B3)**: one Next.js app, no que
 | Databases | Partner Postgres via Marketplace (no Postgres of its own) | Postgres and Redis as services beside your app, private network |
 | Running git on untrusted repos | Needs Vercel Sandbox (disposable microVM per job) | Plain container, or Railway Sandboxes (reported opt-in beta, unverified) |
 | Idle cost | $0 | Uses resources while running; Serverless setting can sleep a service after about 10 minutes idle |
-| Pricing (verified from Vercel's pricing page) | Hobby $0. Pro $20 a month per developer seat, with a $20 usage credit | Markus pays $5 a month (Hobby). Credit and per-resource rates not re-checked |
+| Pricing (verified from Vercel's pricing page) | Hobby $0. Pro $20 a month per developer seat, with a $20 usage credit | Markus pays $5 a month (Railway Hobby plan). Credit and per-resource rates not re-checked |
 | Over the limit | Hobby: hard cap, feature pauses, no bill. Pro: pay-as-you-go, uncapped | Billed by usage |
 | Function limits | Hobby 300 s default and max; Pro 800 s max (a beta 1800 s exists) (secondary) | None for a container beyond your own timeout |
 | MCP server | Yes, official remote server at `mcp.vercel.com`, OAuth (secondary) | Yes, the Railway MCP (used in other projects) |
@@ -192,9 +192,9 @@ An honest, defensible answer, in order of weight:
 
 **Simple version:** for a demo, I moved into the house with the furniture I already had instead of buying a second set for the guest room.
 
-**The longer version:** Production went live on 2026-11-19 at `codebase-city-spike.vercel.app` on Vercel Hobby. Production and Preview share the same Neon database and reuse the existing secrets; this was Markus's decision, taken as the simplest route for a demo (executor notes, "2026-11-25 Production deploy"). The cleaner option, a separate database and secrets for Production, was noted as the alternative and not done. The cost of the shortcut: a Preview deploy can read and write production cache, jobs and quota rows, so a bad preview build can affect the live site. `docs/deployed-services.md` in the workspace was updated at deploy time.
+**The longer version:** Production went live on 2026-11-19 at `codebase-city-spike.vercel.app` on Vercel Hobby. Production and Preview share the same Neon database and reuse the existing secrets; this was Markus's decision (executor notes, "2026-11-25 Production deploy"). The rationale (simplest route for a demo) and the cleaner alternative (a separate database and secrets for Production, not done) come from the task brief for this update, not from the repo or those notes; confirm before quoting them. A consequence I infer, not a recorded finding: a Preview deploy can read and write production cache, jobs and quota rows, so a bad preview build can affect the live site. `docs/deployed-services.md` in the workspace was updated at deploy time.
 
-**Interview talking point:** "I shared one Neon database and the existing secrets between Production and Preview because this is a demo with one maintainer and I wanted it live quickly. I know the clean answer is a separate database for Production, and I'd do that before real users: a preview should not be able to touch production rows."
+**Interview talking point:** "I shared one Neon database and the existing secrets between Production and Preview because it was the simplest route for a demo. I know the clean answer is a separate database for Production, and I'd do that before real users: a preview should not be able to touch production rows."
 
 ### 8. Scaling height: the 98th percentile, not the maximum (PR 26)
 
@@ -210,7 +210,7 @@ An honest, defensible answer, in order of weight:
 
 **The longer version:** after PR 26 cargo still rendered flat. The city layout shrinks one shared building cell by a factor of 0.9 until every district's grid fits. Cargo has `tests/build-std`, a one-file district squeezed beside the huge `tests/testsuite` into a sliver about 79.6 x 0.006 world units. It could never fit, so the loop ran 31 times and the cell ended at 0.038 on a 110.6-unit floor: buildings about 1/3,000 of the floor width, tallest 0.38 where 10 was intended. Other repos shrank 1 to 8 steps for the same reason (1 to 2 file districts such as `.github/actions`), so they were dim copies of the same bug. The loop's 200-step guard was never reached, so nothing flagged it. Fix: floor the shared cell at 0.6, and give a district that still cannot fit at the floor double treemap weight and re-run the layout (at most 12 passes), with a last-resort per-district cell that fuzzing of 3,600 cities never reached. Cargo's cell went from 0.038 to 1.00 and its tallest building from 0.38 to 10.0; django and express were byte-identical before and after.
 
-**Lesson:** the PR 26 tests asserted heights in cell units, so they passed while the world-unit result was wrong. Assert on the quantity a viewer sees (size relative to the floor), not only on the intermediate. Second lesson: I (the executor) over-promised that PR 26 would fix cargo and had to tell Markus it didn't (executor notes).
+**Lesson:** the PR 26 tests asserted heights in cell units, so they passed while the world-unit result was wrong. Assert on the quantity a viewer sees (size relative to the floor), not only on the intermediate. Second lesson: PR 26 was expected to fix cargo and did not; the executor notes record telling Markus so.
 
 **Interview talking point:** "My first fix passed its tests and didn't fix the picture. The tests were in cell units and the defect was in world units: one 0.006-wide sliver district made a shrink loop run 31 times. I reproduced it on the real repo, floored the cell and gave districts that can't fit more area, and compared before and after numbers across all seven gallery repos."
 
