@@ -233,7 +233,7 @@ describe('per-IP daily analysis limit', () => {
     expect(await analyses()).toBe(0);
   });
 
-  it('refunds against the reservation day, not the day of the release', async () => {
+  it('refunds against the stored reservation day (the release clock plays no part)', async () => {
     const { id } = await createOrReuseJob('o', 'r', NOW, KEY());
     expect(await analyses()).toBe(1);
     // The release happens a day later: the unit still goes back to the day it was taken on.
@@ -303,6 +303,44 @@ describe('give-back paths in createOrReuseJob and takeLookup', () => {
     });
     expect(await takeLookup(KEY(), NOW)).toMatchObject({ ok: false });
     expect(gaveBack).toBe(true); // the give-back really ran and failed, and the refusal still came back
+  });
+});
+
+describe('ip_key retention', () => {
+  const keys = async () =>
+    (await t.pg.query<{ ip_key: string | null }>('SELECT ip_key FROM jobs')).rows.map(
+      (r) => r.ip_key,
+    );
+
+  it('a live job keeps its ip_key (needed for the refund) and a done job drops it', async () => {
+    const { id } = await createOrReuseJob('o', 'r', NOW, KEY());
+    expect(await keys()).toEqual([KEY()]);
+    await setJobPhase(id, 'computing');
+    expect(await keys()).toEqual([KEY()]);
+    await setJobPhase(id, 'done');
+    expect(await keys()).toEqual([null]);
+  });
+
+  it('a failed job drops its ip_key in the same statement that refunds the per-IP unit', async () => {
+    const { id } = await createOrReuseJob('o', 'r', NOW, KEY());
+    await setJobPhase(id, 'failed', 'clone_failed');
+    expect(await keys()).toEqual([null]);
+    expect(await analyses()).toBe(0); // the refund still found the key
+  });
+
+  it('a job refused by a limit never keeps an ip_key', async () => {
+    await t.pg.query(`INSERT INTO usage_counters (period, count) VALUES ('d:2026-11-16', $1)`, [
+      DAILY_LIMIT,
+    ]);
+    await createOrReuseJob('o', 'r', NOW, KEY());
+    expect(await keys()).toEqual([null]);
+  });
+
+  it('a kept-quota failure (Sandbox started) also drops the key', async () => {
+    const { id } = await createOrReuseJob('o', 'r', NOW, KEY());
+    await setJobPhase(id, 'failed', 'timeout', { keepQuota: true });
+    expect(await keys()).toEqual([null]);
+    expect(await analyses()).toBe(1);
   });
 });
 

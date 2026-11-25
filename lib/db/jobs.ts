@@ -72,7 +72,7 @@ async function failJob(
           FOR UPDATE
      ),
      upd AS (
-       UPDATE jobs j SET phase = 'failed', error_code = $2, reserved = false
+       UPDATE jobs j SET phase = 'failed', error_code = $2, reserved = false, ip_key = NULL
          FROM old WHERE j.id = old.id
        RETURNING j.id, old.reserved AS was_reserved, old.reserved_on AS day,
                  old.sandbox_started AS started, old.ip_key AS ip
@@ -205,8 +205,8 @@ export async function createOrReuseJob(
     }
     // The row was failed in between (for example swept): hand the units back, nothing holds them.
     if (marked.length === 0) {
+      await giveIpBack(); // first: a throwing releaseQuota must not strand the per-IP unit
       await releaseQuota(utcDay(now));
-      await giveIpBack();
     }
     return { id, reused: false, ...(analysesLeft === undefined ? {} : { analysesLeft }) };
   }
@@ -228,9 +228,11 @@ export async function setJobPhase(
     await failJob(id, errorCode ?? 'unknown', false, opts.keepQuota === true);
     return;
   }
+  // The hashed IP is only needed to refund the per-IP unit, so a job that finishes drops it (`failJob`
+  // does the same): rows must not keep a visitor-hash-to-repo link after the run is over.
   // Phases only move forward: a late or duplicate update cannot regress a live job.
   await getDb().query(
-    `UPDATE jobs SET phase = $2
+    `UPDATE jobs SET phase = $2, ip_key = CASE WHEN $2 = 'done' THEN NULL ELSE ip_key END
       WHERE id = $1 AND phase NOT IN ('done', 'failed')
         AND array_position($3::text[], phase) < array_position($3::text[], $2)`,
     [id, phase, FORWARD_ORDER],
