@@ -1,7 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { setDb } from '@/lib/db/client';
 import { backfillCards, listLiveCards } from '@/lib/db/cards';
-import { putCached } from '@/lib/db/cache';
+import { putCached, putCard } from '@/lib/db/cache';
+import { SCHEMA_VERSION } from '@/lib/analysis/schema';
 import { galleryCard, parseCard, type GalleryCard } from '@/lib/gallery-cards';
 import { HOME_CARD_CAP, loadHomeCards, mergeCards } from '@/lib/home-gallery';
 import { pgAdapter, useTestDb } from './helpers/pgliteDb';
@@ -225,6 +226,31 @@ describe('live cards in Postgres', () => {
     expect(after.rows[0]!.card).toBeNull();
     expect(await backfillCards(5)).toBe(1);
     expect((await listLiveCards(24)).map((c) => c.name)).toEqual(['flaky']);
+  });
+
+  it('a repo with many directories still lists: its card is capped to the largest rects and parses', async () => {
+    const a = sampleAnalysis('many', 'dirs');
+    a.files = Array.from({ length: 2000 }, (_, i) => ({
+      ...a.files[0]!,
+      path: `d${i % 500}/f${i}.ts`,
+    }));
+    const c = galleryCard(a, new Date('2026-11-20T00:00:00Z'));
+    expect(c.rects.length).toBeLessThanOrEqual(300);
+    expect(c.rects.length).toBeGreaterThan(0);
+    expect(parseCard(JSON.parse(JSON.stringify(c)))).toEqual(c);
+    await putCached(a, new Date('2026-11-20T00:00:00Z'));
+    expect((await listLiveCards(24)).map((x) => x.name)).toEqual(['dirs']);
+  });
+
+  it('putCard with onlyIfNull never overwrites an existing card, and fills a NULL one', async () => {
+    await putCached(sampleAnalysis('a', 'x'), new Date('2026-11-01T00:00:00Z'));
+    const first = galleryCard(sampleAnalysis('a', 'x'), new Date('2026-11-01T00:00:00Z'));
+    const other = { ...first, language: 'Other-lang' };
+    await putCard('a', 'x', SCHEMA_VERSION, other, { onlyIfNull: true });
+    expect((await listLiveCards(24))[0]!.language).toBe(first.language);
+    await t.pg.exec('UPDATE analyses SET card = NULL');
+    await putCard('a', 'x', SCHEMA_VERSION, other, { onlyIfNull: true });
+    expect((await listLiveCards(24))[0]!.language).toBe('Other-lang');
   });
 
   it('a failed card write on a re-analysis clears the old card instead of keeping it', async () => {

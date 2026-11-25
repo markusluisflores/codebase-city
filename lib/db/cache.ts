@@ -74,15 +74,18 @@ export async function putCached(analysis: Analysis, now: Date): Promise<void> {
   }
 }
 
-/** Stores the home-page card for a row (throws on a database error, for example an unmigrated table). */
+/** Stores the home-page card for a row; `onlyIfNull` keeps a card a concurrent re-analysis already wrote (throws on a database error, for example an unmigrated table). */
 export async function putCard(
   owner: string,
   name: string,
   schemaVersion: number,
   card: GalleryCard,
+  opts: { onlyIfNull?: boolean } = {},
 ): Promise<void> {
   await getDb().query(
-    `UPDATE analyses SET card = $4::jsonb WHERE owner = $1 AND name = $2 AND schema_version = $3`,
+    `UPDATE analyses SET card = $4::jsonb WHERE owner = $1 AND name = $2 AND schema_version = $3${
+      opts.onlyIfNull ? ' AND card IS NULL' : ''
+    }`,
     [keyPart(owner), keyPart(name), schemaVersion, JSON.stringify(card)],
   );
 }

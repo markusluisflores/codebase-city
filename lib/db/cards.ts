@@ -12,7 +12,7 @@ export async function listLiveCards(limit: number): Promise<GalleryCard[]> {
   const rows = await getDb().query<{ card: unknown }>(
     `SELECT card FROM analyses
       WHERE schema_version = $1 AND card IS NOT NULL
-      ORDER BY analysed_at DESC
+      ORDER BY analysed_at DESC, owner, name
       LIMIT $2`,
     [SCHEMA_VERSION, limit],
   );
@@ -41,7 +41,7 @@ export async function backfillCards(limit: number): Promise<number> {
   const rows = await getDb().query<{ owner: string; name: string }>(
     `SELECT owner, name FROM analyses
       WHERE schema_version = $1 AND card IS NULL
-      ORDER BY analysed_at DESC
+      ORDER BY analysed_at DESC, owner, name
       LIMIT $2`,
     [SCHEMA_VERSION, limit],
   );
@@ -64,7 +64,8 @@ export async function backfillCards(limit: number): Promise<number> {
     if (!built) {
       try {
         await getDb().query(
-          `UPDATE analyses SET card = '{}'::jsonb WHERE owner = $1 AND name = $2 AND schema_version = $3`,
+          `UPDATE analyses SET card = '{}'::jsonb
+            WHERE owner = $1 AND name = $2 AND schema_version = $3 AND card IS NULL`,
           [owner, name, SCHEMA_VERSION],
         );
       } catch {
@@ -73,7 +74,7 @@ export async function backfillCards(limit: number): Promise<number> {
       continue;
     }
     try {
-      await putCard(owner, name, SCHEMA_VERSION, built);
+      await putCard(owner, name, SCHEMA_VERSION, built, { onlyIfNull: true });
       filled++;
     } catch {
       // Database error, possibly transient: leave card NULL so a later render retries.

@@ -75,16 +75,18 @@ function dominantLanguage(analysis: Analysis): string | null {
 export function galleryCard(analysis: Analysis, analysedAt?: Date): GalleryCard {
   const ctx = buildColourContext(analysis.files, analysis.window.to);
   const byPath = new Map(analysis.files.map((f) => [f.path, f] as const));
-  const rects = treemap2D(analysis.files, THUMB_W, THUMB_H, THUMB_MAX_RECTS).map((r) => {
-    const file = byPath.get(r.path);
-    return {
-      x: round(r.x),
-      y: round(r.y),
-      w: round(r.w),
-      h: round(r.h),
-      fill: file ? colourFor('hotspot', file, ctx) : COLD,
-    };
-  });
+  const rects = largestRects(treemap2D(analysis.files, THUMB_W, THUMB_H, THUMB_MAX_RECTS)).map(
+    (r) => {
+      const file = byPath.get(r.path);
+      return {
+        x: round(r.x),
+        y: round(r.y),
+        w: round(r.w),
+        h: round(r.h),
+        fill: file ? colourFor('hotspot', file, ctx) : COLD,
+      };
+    },
+  );
   return {
     owner: analysis.repo.owner,
     name: analysis.repo.name,
@@ -93,6 +95,19 @@ export function galleryCard(analysis: Analysis, analysedAt?: Date): GalleryCard 
     live: analysedAt !== undefined,
     rects,
   };
+}
+
+/** treemap2D may return more than the cap (one merged rect per folder); keep the largest, in original order. */
+function largestRects<T extends { w: number; h: number }>(all: T[]): T[] {
+  if (all.length <= THUMB_MAX_RECTS) return all;
+  const keep = new Set(
+    all
+      .map((r, i) => ({ i, area: r.w * r.h }))
+      .sort((a, b) => b.area - a.area || a.i - b.i)
+      .slice(0, THUMB_MAX_RECTS)
+      .map((e) => e.i),
+  );
+  return all.filter((_, i) => keep.has(i));
 }
 
 const round = (n: number): number => Math.round(n * 10) / 10;
