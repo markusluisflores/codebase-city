@@ -47,6 +47,17 @@ export function TreemapView({
   const box = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  // Redraw once the page fonts have loaded, so the labels do not stay in the fallback face.
+  const [fontsLoaded, setFontsLoaded] = useState(0);
+  useEffect(() => {
+    let live = true;
+    void document.fonts?.ready.then(() => {
+      if (live) setFontsLoaded((n) => n + 1);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
   const [tip, setTip] = useState<{ text: string; x: number; y: number } | null>(null);
 
   useEffect(() => {
@@ -109,8 +120,10 @@ export function TreemapView({
         ? undefined
         : districtBoxes.find((b) => b.path === highlightedDistrict);
     if (hl) {
-      ctx.fillStyle = 'rgba(251, 146, 60, 0.3)';
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = TOKENS.accent;
       ctx.fillRect(hl.x, hl.y, hl.w, hl.h);
+      ctx.globalAlpha = 1;
       ctx.lineWidth = 2;
       ctx.strokeStyle = TOKENS.text;
       ctx.strokeRect(hl.x + 1, hl.y + 1, Math.max(0, hl.w - 2), Math.max(0, hl.h - 2));
@@ -135,7 +148,17 @@ export function TreemapView({
       ctx.strokeStyle = '#ffffff';
       ctx.strokeRect(sel.x + 1, sel.y + 1, Math.max(0, sel.w - 2), Math.max(0, sel.h - 2));
     }
-  }, [rects, bounds, colourOf, selectedPath, size, districtBoxes, labels, highlightedDistrict]);
+  }, [
+    rects,
+    bounds,
+    colourOf,
+    selectedPath,
+    size,
+    districtBoxes,
+    labels,
+    highlightedDistrict,
+    fontsLoaded,
+  ]);
 
   const at = (e: { clientX: number; clientY: number }) => {
     const rect = canvas.current?.getBoundingClientRect();
