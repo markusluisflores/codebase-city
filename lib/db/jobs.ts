@@ -179,13 +179,14 @@ export async function createOrReuseJob(
       reservation = await reserveQuota(now);
     } catch (err) {
       // Never leave an unreserved non-terminal row that blocks the repo for five minutes.
-      await failJob(id, 'db_write_failed');
+      // The per-IP unit goes back first: if the failing statement throws too, the unit is not stranded.
       await giveIpBack();
+      await failJob(id, 'db_write_failed');
       throw err;
     }
     if (!reservation.ok) {
-      await failJob(id, reservation.reason);
       await giveIpBack();
+      await failJob(id, reservation.reason);
       return { id, reused: false };
     }
     let marked: unknown[];

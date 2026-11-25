@@ -136,7 +136,7 @@ export async function takeLookup(
     throw err;
   }
   if (taken.length === 0) {
-    await db.query(GIVE_BACK, [perIp]);
+    await db.query(GIVE_BACK, [perIp]).catch(() => undefined);
     return refused;
   }
   return { ok: true };

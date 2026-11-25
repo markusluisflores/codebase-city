@@ -8,6 +8,7 @@ import {
   DAILY_LIMIT,
   ipLimitKey,
   LOOKUP_LIMIT_PER_IP_HOUR,
+  takeLookup,
 } from '@/lib/db/limits';
 import { errorMessage } from '@/lib/errors';
 import { GitHubError } from '@/lib/repo/github';
@@ -243,6 +244,59 @@ describe('per-IP daily analysis limit', () => {
       vi.useRealTimers();
     }
     expect(await analyses()).toBe(0);
+  });
+});
+
+describe('give-back paths in createOrReuseJob and takeLookup', () => {
+  const real = () => pgAdapter(t.pg);
+  const wrap = (hook: (sql: string) => Promise<void> | void) =>
+    setDb({
+      async query<T>(sql: string, params: unknown[] = []) {
+        await hook(sql);
+        return real().query<T>(sql, params);
+      },
+    });
+  const holds = async () => ({ ip: await analyses(), global: await count('d:2026-11-16') });
+
+  it('a throwing reserved-mark update releases both units exactly once (through ip_key)', async () => {
+    wrap((sql) => {
+      if (sql.includes('SET reserved = true')) throw new Error('lost response');
+    });
+    await expect(createOrReuseJob('o', 'r', NOW, KEY())).rejects.toThrow('lost response');
+    expect(await holds()).toEqual({ ip: 0, global: 0 });
+  });
+
+  it('a row failed between insert and mark releases both units once, with no double refund', async () => {
+    await t.pg.query(`INSERT INTO usage_counters (period, count) VALUES ('d:2026-11-16', 3)`);
+    wrap(async (sql) => {
+      if (sql.includes('SET reserved = true')) {
+        await t.pg.query(`UPDATE jobs SET phase = 'failed', error_code = 'timeout'`);
+      }
+    });
+    const job = await createOrReuseJob('o', 'r', NOW, KEY());
+    expect(job.reused).toBe(false);
+    expect(await holds()).toEqual({ ip: 0, global: 3 }); // back to where it started, not below
+  });
+
+  it('a global refusal returns the per-IP unit even when failing the row then throws', async () => {
+    await t.pg.query(`INSERT INTO usage_counters (period, count) VALUES ('d:2026-11-16', $1)`, [
+      DAILY_LIMIT,
+    ]);
+    wrap((sql) => {
+      if (sql.includes('WITH old AS')) throw new Error('db blip');
+    });
+    await expect(createOrReuseJob('o', 'r', NOW, KEY())).rejects.toThrow('db blip');
+    expect(await analyses()).toBe(0);
+  });
+
+  it('a failed give-back after a global lookup refusal still reports the refusal', async () => {
+    await t.pg.query(
+      `INSERT INTO usage_counters (period, count) VALUES ('lk:2026-11-16T12:g', 400)`,
+    );
+    wrap((sql) => {
+      if (sql.startsWith('UPDATE usage_counters SET count = GREATEST')) throw new Error('db blip');
+    });
+    expect(await takeLookup(KEY(), NOW)).toMatchObject({ ok: false });
   });
 });
 
