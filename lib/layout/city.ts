@@ -1,4 +1,4 @@
-import { hierarchy, treemap, treemapSquarify } from 'd3-hierarchy';
+import { hierarchy, treemap, treemapSquarify, type HierarchyRectangularNode } from 'd3-hierarchy';
 import { cleanSize, mergeSmallest, type SizedFile } from './treemap';
 
 /** Building `x`/`z` and district `x`/`z` are centres; the whole city is centred on the origin. */
@@ -40,7 +40,16 @@ export const MAX_HEIGHT = 10;
  * single oversized file (a generated or vendored blob) cannot flatten every other building.
  */
 const REFERENCE_PERCENTILE = 0.98;
-const MAX_SHRINK_STEPS = 200;
+/** Rounds in which districts that cannot fit at MIN_CELL have their treemap weight doubled. */
+const MAX_WEIGHT_PASSES = 12;
+/**
+ * The shared grid cell (a fraction of the nominal 1) shrinks in 0.9 steps only while it stays at
+ * or above this, so it ends at 0.9^MAX_SHRINK_STEPS, the last step that is still >= MIN_CELL.
+ */
+export const MIN_CELL = 0.6;
+const MAX_SHRINK_STEPS = Math.floor(Math.log(MIN_CELL) / Math.log(0.9));
+/** Districts that still cannot hold their grid at the shared cell shrink their own cell instead. */
+const MAX_LOCAL_STEPS = 200;
 
 interface Placed extends SizedFile {
   district: string;
@@ -112,13 +121,19 @@ function referenceSize(sizes: number[]): number {
   return sorted[rank]! > 0 ? sorted[rank]! : (sorted[sorted.length - 1] ?? 0);
 }
 
+function gridFits(w: number, h: number, count: number, cell: number): boolean {
+  const cols = Math.floor(w / cell);
+  return cols >= 1 && Math.ceil(count / cols) * cell <= h;
+}
+
 function compare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /**
  * City layout: districts are the folders at depth 1 and 2 (a depth-2 district nests in its
- * depth-1 parent), laid out as a squarified treemap weighted by building count; every district
+ * depth-1 parent), laid out as a squarified treemap weighted by building count (a district that
+ * cannot hold its grid at the shared cell floor has its weight doubled and the layout repeated); every district
  * holds its buildings in a grid of equal footprints, with heights on a square-root scale of
  * size, capped at the 98th percentile of sizes. Past `maxBuildings` the smallest files of each
  * district merge into one "(other)" building, and those count towards the cap (best effort only
@@ -138,25 +153,40 @@ export function cityLayout(files: SizedFile[], maxBuildings = 5000): CityLayout 
   );
   const total = placed.length;
   const root = buildTree(placed);
-  const base = hierarchy<DNode>(root, (n) => (n.children.length > 0 ? n.children : null))
-    .sum((n) => n.count)
-    .sort((a, b) => (b.value ?? 0) - (a.value ?? 0) || compare(a.data.path, b.data.path));
-
-  // The container leaves about 4x the grid area for gaps; shrink the cell until every grid fits.
+  // The container leaves about 4x the grid area for gaps.
   const side = 2 * Math.sqrt(total);
   const layout = treemap<DNode>().tile(treemapSquarify).size([side, side]).round(false);
+  // Treemap weight of a leaf district; starts at its building count.
+  const weightOf = new Map<string, number>();
+  const collectLeaves = (n: DNode): void => {
+    if (n.children.length === 0) weightOf.set(n.path, n.count);
+    else n.children.forEach(collectLeaves);
+  };
+  collectLeaves(root);
+  const arrange = (cell: number): HierarchyRectangularNode<DNode> => {
+    const h = hierarchy<DNode>(root, (n) => (n.children.length > 0 ? n.children : null))
+      .sum((n) => (n.children.length > 0 ? 0 : (weightOf.get(n.path) ?? n.count)))
+      .sort((x, y) => (y.value ?? 0) - (x.value ?? 0) || compare(x.data.path, y.data.path));
+    return layout.paddingInner(0.3 * cell).paddingOuter(0.3 * cell)(h);
+  };
+  const misfits = (t: HierarchyRectangularNode<DNode>, cell: number) =>
+    t.leaves().filter((l) => !gridFits(l.x1 - l.x0, l.y1 - l.y0, l.data.count, cell));
+
+  // Shrink the shared cell until every grid fits, but never below MIN_CELL. A district that
+  // still cannot fit (a lone file squeezed into a sliver beside a huge folder) gets more
+  // treemap weight and the search restarts, so one awkward district cannot shrink the whole city.
   let cell = 1;
-  let tree = layout(base);
-  for (let step = 0; ; step++) {
-    tree = layout.paddingInner(0.3 * cell).paddingOuter(0.3 * cell)(base);
-    const fits = tree.leaves().every((l) => {
-      const w = l.x1 - l.x0;
-      const h = l.y1 - l.y0;
-      const cols = Math.floor(w / cell);
-      return cols >= 1 && Math.ceil(l.data.count / cols) * cell <= h;
-    });
-    if (fits || step >= MAX_SHRINK_STEPS) break;
-    cell *= 0.9;
+  let tree = arrange(cell);
+  for (let pass = 0; pass <= MAX_WEIGHT_PASSES; pass++) {
+    cell = 1;
+    tree = arrange(cell);
+    for (let step = 0; step < MAX_SHRINK_STEPS && misfits(tree, cell).length > 0; step++) {
+      cell *= 0.9;
+      tree = arrange(cell);
+    }
+    const bad = misfits(tree, cell);
+    if (bad.length === 0 || pass === MAX_WEIGHT_PASSES) break;
+    for (const l of bad) weightOf.set(l.data.path, (weightOf.get(l.data.path) ?? l.data.count) * 2);
   }
 
   const half = side / 2;
@@ -188,18 +218,21 @@ export function cityLayout(files: SizedFile[], maxBuildings = 5000): CityLayout 
     const g = grids.get(district);
     if (!g) continue;
     list.sort((a, b) => cleanSize(b.size) - cleanSize(a.size) || compare(a.path, b.path));
-    const cols = Math.max(1, Math.floor(g.w / cell));
+    // A district that cannot hold its grid at the shared cell uses a smaller one of its own.
+    let c = cell;
+    for (let i = 0; i < MAX_LOCAL_STEPS && !gridFits(g.w, g.h, list.length, c); i++) c *= 0.9;
+    const cols = Math.max(1, Math.floor(g.w / c));
     const rows = Math.ceil(list.length / cols);
-    const offX = (g.w - Math.min(cols, list.length) * cell) / 2;
-    const offY = (g.h - rows * cell) / 2;
+    const offX = (g.w - Math.min(cols, list.length) * c) / 2;
+    const offY = (g.h - rows * c) / 2;
     list.forEach((b, i) => {
       const share = refSize > 0 ? Math.min(1, Math.sqrt(cleanSize(b.size) / refSize)) : 0;
       buildings.push({
         path: b.path,
-        x: g.x0 + offX + ((i % cols) + 0.5) * cell - half,
-        z: g.y0 + offY + (Math.floor(i / cols) + 0.5) * cell - half,
-        footprint: cell * FILL,
-        height: cell * (MIN_HEIGHT + (MAX_HEIGHT - MIN_HEIGHT) * share),
+        x: g.x0 + offX + ((i % cols) + 0.5) * c - half,
+        z: g.y0 + offY + (Math.floor(i / cols) + 0.5) * c - half,
+        footprint: c * FILL,
+        height: c * (MIN_HEIGHT + (MAX_HEIGHT - MIN_HEIGHT) * share),
       });
     });
   }
