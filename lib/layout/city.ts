@@ -32,8 +32,14 @@ const OTHER = '(other)';
 
 /** Fraction of a grid cell a building occupies; the rest is the gap between buildings. */
 const FILL = 0.8;
-const MIN_HEIGHT = 0.25;
-const MAX_HEIGHT = 10;
+/** Building heights are in grid cells: smallest and tallest. */
+export const MIN_HEIGHT = 0.4;
+export const MAX_HEIGHT = 10;
+/**
+ * Sizes at or above this percentile of the cleaned building sizes all reach MAX_HEIGHT, so a
+ * single oversized file (a generated or vendored blob) cannot flatten every other building.
+ */
+const REFERENCE_PERCENTILE = 0.98;
 const MAX_SHRINK_STEPS = 200;
 
 interface Placed extends SizedFile {
@@ -99,6 +105,13 @@ function buildTree(buildings: Placed[]): DNode {
   return root;
 }
 
+/** Nearest-rank percentile of cleaned sizes; falls back to the maximum when that is zero. */
+function referenceSize(sizes: number[]): number {
+  const sorted = sizes.map(cleanSize).sort((a, b) => a - b);
+  const rank = Math.max(0, Math.ceil(REFERENCE_PERCENTILE * sorted.length) - 1);
+  return sorted[rank]! > 0 ? sorted[rank]! : (sorted[sorted.length - 1] ?? 0);
+}
+
 function compare(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
@@ -106,9 +119,10 @@ function compare(a: string, b: string): number {
 /**
  * City layout: districts are the folders at depth 1 and 2 (a depth-2 district nests in its
  * depth-1 parent), laid out as a squarified treemap weighted by building count; every district
- * holds its buildings in a grid of equal footprints, with heights on a square-root scale of size.
- * Past `maxBuildings` the smallest files of each district merge into one "(other)" building, and
- * those count towards the cap (best effort only if there are more leaf districts than the cap).
+ * holds its buildings in a grid of equal footprints, with heights on a square-root scale of
+ * size, capped at the 98th percentile of sizes. Past `maxBuildings` the smallest files of each
+ * district merge into one "(other)" building, and those count towards the cap (best effort only
+ * if there are more leaf districts than the cap).
  */
 export function cityLayout(files: SizedFile[], maxBuildings = 5000): CityLayout {
   if (files.length === 0) return { buildings: [], districts: [] };
@@ -168,7 +182,7 @@ export function cityLayout(files: SizedFile[], maxBuildings = 5000): CityLayout 
     if (list) list.push(b);
     else byDistrict.set(b.district, [b]);
   }
-  const maxSize = placed.reduce((m, b) => Math.max(m, cleanSize(b.size)), 0);
+  const refSize = referenceSize(placed.map((b) => b.size));
   const buildings: CityBuilding[] = [];
   for (const [district, list] of byDistrict) {
     const g = grids.get(district);
@@ -179,7 +193,7 @@ export function cityLayout(files: SizedFile[], maxBuildings = 5000): CityLayout 
     const offX = (g.w - Math.min(cols, list.length) * cell) / 2;
     const offY = (g.h - rows * cell) / 2;
     list.forEach((b, i) => {
-      const share = maxSize > 0 ? Math.sqrt(cleanSize(b.size) / maxSize) : 0;
+      const share = refSize > 0 ? Math.min(1, Math.sqrt(cleanSize(b.size) / refSize)) : 0;
       buildings.push({
         path: b.path,
         x: g.x0 + offX + ((i % cols) + 0.5) * cell - half,
