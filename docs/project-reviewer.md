@@ -34,7 +34,7 @@ Paste a public GitHub repo URL and get a 3D city plus a 2D treemap of its files,
 
 ## Future improvements and known limits
 
-Markus's first-use feedback on the PR 19 preview (2026-11-18, "works well, likes it") produced the first three items below (gallery, labels, password flow); as of 2026-11-25 each of those is in design or build in its own branch and none has merged. Re-analyse was a separate decision, deferred by Markus on 2026-11-18.
+Markus's first-use feedback on the PR 19 preview (2026-11-18, "works well, likes it") produced three of the items below (home gallery, district labels, password flow); as of 2026-11-25 each of those is in design or build in its own branch and none has merged. Re-analyse was a separate decision, deferred by Markus on 2026-11-18.
 
 * Re-analyse a cached repo behind the password (deferred by Markus, 2026-11-18).
 * Show analysed repos in the home gallery (they are in the database cache but not listed).
@@ -192,9 +192,9 @@ An honest, defensible answer, in order of weight:
 
 **Simple version:** for a demo, I moved into the house with the furniture I already had instead of buying a second set for the guest room.
 
-**The longer version:** Production went live on 2026-11-19 at `codebase-city-spike.vercel.app` on Vercel Hobby. Production and Preview share the same Neon database and reuse the existing secrets; this was Markus's decision (executor notes, "2026-11-25 Production deploy"). The rationale (simplest route for a demo) and the cleaner alternative (a separate database and secrets for Production, not done) come from the task brief for this update, not from the repo or those notes; confirm before quoting them. A consequence I infer, not a recorded finding: a Preview deploy can read and write production cache, jobs and quota rows, so a bad preview build can affect the live site. `docs/deployed-services.md` in the workspace was updated at deploy time.
+**The longer version:** Production went live on 2026-11-19 at `codebase-city-spike.vercel.app` on Vercel Hobby. Production and Preview share the same Neon database and reuse the existing secrets; this was Markus's decision (executor notes, "2026-11-25 Production deploy"). The rationale (simplest route for a demo) and the cleaner alternative (a separate database and secrets for Production, not done) are not recorded in the repo or those notes; confirm with Markus before quoting them. A consequence I infer, not a recorded finding: a Preview deploy can read and write production cache, jobs and quota rows, so a bad preview build can affect the live site. `docs/deployed-services.md` in the workspace was updated at deploy time.
 
-**Interview talking point:** "I shared one Neon database and the existing secrets between Production and Preview because it was the simplest route for a demo. I know the clean answer is a separate database for Production, and I'd do that before real users: a preview should not be able to touch production rows."
+**Interview talking point:** "I shared one Neon database and the existing secrets between Production and Preview because it was the simplest route for a demo (confirm this is the reason you want to give). I know the clean answer is a separate database for Production, and I'd do that before real users: a preview should not be able to touch production rows."
 
 ### 8. Scaling height: the 98th percentile, not the maximum (PR 26)
 
