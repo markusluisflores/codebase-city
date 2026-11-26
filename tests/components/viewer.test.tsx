@@ -293,7 +293,8 @@ describe('ViewerLoader', () => {
     await waitFor(() => expect(screen.getByText(/not analysed yet/i)).toBeTruthy());
     expect(screen.getByRole('link', { name: /gallery/i }).getAttribute('href')).toBe('/');
     // The repo is already known, so there is no repo field: one password field and one button.
-    expect(screen.getByLabelText(/demo password/i)).toBeTruthy();
+    // The panel waits for the first status answer, so it is not there in the same tick as the heading.
+    expect(await screen.findByLabelText(/demo password/i)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Unlock and analyse' })).toBeTruthy();
     expect(screen.queryByLabelText(/github repository/i)).toBeNull();
   });
