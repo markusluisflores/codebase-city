@@ -102,6 +102,26 @@ describe('ReanalyseStrip: who sees it', () => {
   });
 });
 
+describe('ReanalyseStrip: stale copy and focus', () => {
+  it('shows the stale note but no check button to a locked visitor', async () => {
+    unlocked = false;
+    strip({ stale: true, onReload: vi.fn() });
+    await flush();
+    expect(screen.getByText(/may show the previous one/i)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Check for new commits' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy();
+  });
+
+  it('keeps focus inside the strip when the check starts', async () => {
+    strip();
+    await flush();
+    await openDisclosure();
+    await confirm();
+    const region = screen.getByRole('region', { name: /re-analyse this repository/i });
+    expect(document.activeElement).toBe(region);
+  });
+});
+
 describe('ReanalyseStrip: the cost note and the check', () => {
   it('explains the cost before anything runs, and Cancel returns focus to the button', async () => {
     strip();

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useSession } from '@/lib/auth/useSession';
 import { AnalyseForm } from './AnalyseForm';
 import { ErrorState } from './ErrorState';
@@ -69,7 +69,11 @@ export function AnalyseGate({
     if (await refresh()) {
       setJustUnlocked(true);
       setOpen(false);
-      setAnnounce('Unlocked. You can analyse a repository now.');
+      setAnnounce(
+        forRepo
+          ? 'Unlocked. Analysing this repository.'
+          : 'Unlocked. You can analyse a repository now.',
+      );
     } else {
       setProblem('unavailable'); // the cookie was set but not kept (cookies blocked)
     }
@@ -86,15 +90,12 @@ export function AnalyseGate({
     }
   }
 
-  const live = (
-    <div role="status" aria-live="polite" className={s.sr}>
-      {announce}
-    </div>
-  );
-
+  // One live region, first child of one wrapper in every state, so it keeps its place in the tree and
+  // "Unlocked." and "Locked." are announced instead of the region being replaced.
+  let body: ReactNode;
   if (unlocked) {
-    return (
-      <div className={s.gate}>
+    body = (
+      <>
         <p className={s.unlockedBar}>
           <LockIcon open />
           <span>{`Unlocked until ${dayOf(session.expiresAt)}`}</span>
@@ -103,63 +104,71 @@ export function AnalyseGate({
           </button>
         </p>
         {problem ? <ErrorState code={problem} /> : null}
-        {live}
         <AnalyseForm
           initialRepo={initialRepo}
           currentRepo={currentRepo}
           onDone={onDone}
-          autoFocusRepo={justUnlocked && !forRepo}
+          autoFocusRepo={justUnlocked}
           autoStart={justUnlocked && forRepo}
+          onUnlocked={() => void refresh()}
         />
-      </div>
+      </>
     );
-  }
-
-  if (forRepo) {
-    return (
-      <div className={s.gate}>
-        <UnlockPanel
-          submitLabel="Unlock and analyse"
-          autoFocus={false}
-          onUnlocked={() => void onUnlocked()}
-        />
+  } else if (forRepo) {
+    // Until the first status answer, show nothing to type into: an already-unlocked visitor must not
+    // see a password panel that then turns into the repo form mid-typing.
+    body =
+      session.state === 'unknown' ? null : (
+        <>
+          <UnlockPanel
+            submitLabel="Unlock and analyse"
+            autoFocus={false}
+            onUnlocked={() => void onUnlocked()}
+          />
+          {problem ? <ErrorState code={problem} /> : null}
+        </>
+      );
+  } else {
+    body = (
+      <>
+        <button
+          ref={trigger}
+          type="button"
+          className={s.lockButton}
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((o) => !o)}
+        >
+          <LockIcon />
+          Analyse your own repo
+        </button>
+        <p className={s.gateNote}>
+          The gallery below is open to everyone. Analysing a new repo uses a small hosted compute
+          budget, so it needs a demo password.
+        </p>
+        <div id={panelId}>
+          {open ? (
+            <UnlockPanel
+              submitLabel="Unlock"
+              onUnlocked={() => void onUnlocked()}
+              onCancel={() => {
+                setOpen(false);
+                focusTrigger.current = true;
+              }}
+            />
+          ) : null}
+        </div>
         {problem ? <ErrorState code={problem} /> : null}
-        {live}
-      </div>
+      </>
     );
   }
 
   return (
     <div className={s.gate}>
-      <button
-        ref={trigger}
-        type="button"
-        className={s.lockButton}
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <LockIcon />
-        Analyse your own repo
-      </button>
-      <p className={s.gateNote}>
-        The gallery below is open to everyone. Analysing a new repo uses a small hosted compute
-        budget, so it needs a demo password.
-      </p>
-      <div id={panelId}>
-        {open ? (
-          <UnlockPanel
-            submitLabel="Unlock"
-            onUnlocked={() => void onUnlocked()}
-            onCancel={() => {
-              setOpen(false);
-              focusTrigger.current = true;
-            }}
-          />
-        ) : null}
+      <div role="status" aria-live="polite" className={s.sr}>
+        {announce}
       </div>
-      {problem ? <ErrorState code={problem} /> : null}
-      {live}
+      {body}
     </div>
   );
 }

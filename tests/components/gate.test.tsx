@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AnalyseGate } from '@/components/AnalyseGate';
@@ -14,6 +15,7 @@ let unlocked: boolean;
 let loginResponse: () => Response;
 let statusFails: boolean;
 let analyzeResponse: () => Response;
+let lockFails: boolean;
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 
@@ -23,6 +25,7 @@ beforeEach(() => {
   calls.length = 0;
   unlocked = false;
   statusFails = false;
+  lockFails = false;
   loginResponse = () => new Response(null, { status: 204 });
   analyzeResponse = () => json({ status: 'cached', source: 'live', owner: 'octo', name: 'repo' });
   vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
@@ -41,6 +44,7 @@ beforeEach(() => {
       return Promise.resolve(res);
     }
     if (url === '/api/session' && method === 'DELETE') {
+      if (lockFails) return Promise.resolve(new Response(null, { status: 500 }));
       unlocked = false;
       return Promise.resolve(new Response(null, { status: 204 }));
     }
@@ -172,7 +176,91 @@ describe('AnalyseGate on the home page', () => {
   });
 });
 
+describe('AnalyseGate: announcements and failures', () => {
+  it('keeps one live region across unlock and lock, so the changes are announced', async () => {
+    const { container } = render(<AnalyseGate />);
+    await flush();
+    const region = container.querySelector('[role="status"]')!;
+    await openPanel();
+    typePassword('hunter2');
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock' }));
+    await flush();
+    expect(container.querySelector('[role="status"]')).toBe(region);
+    expect(region.textContent).toMatch(/^Unlocked\./);
+    fireEvent.click(screen.getByRole('button', { name: 'Lock' }));
+    await flush();
+    expect(container.querySelector('[role="status"]')).toBe(region);
+    expect(region.textContent).toBe('Locked.');
+  });
+
+  it('stays unlocked and says so when Lock fails', async () => {
+    unlocked = true;
+    lockFails = true;
+    render(<AnalyseGate />);
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Lock' }));
+    await flush();
+    expect(screen.getByRole('alert').textContent).toContain(errorMessage('unavailable'));
+    expect(screen.getByRole('button', { name: 'Lock' })).toBeTruthy();
+    expect(screen.getByLabelText(/github repository/i)).toBeTruthy();
+  });
+
+  it('refreshes the displayed expiry after an inline re-unlock mid-job', async () => {
+    unlocked = true;
+    let jobPolls = 0;
+    analyzeResponse = () => json({ status: 'job', id: '11111111-1111-4111-8111-111111111111' });
+    const base = globalThis.fetch;
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+      if (url.startsWith('/api/jobs/')) {
+        calls.push({ url, method: 'GET' });
+        jobPolls += 1;
+        return Promise.resolve(json({ error: 'unauthorized' }, 401));
+      }
+      return base(url, init);
+    });
+    render(<AnalyseGate />);
+    await flush();
+    fireEvent.change(screen.getByLabelText(/github repository/i), {
+      target: { value: 'octo/repo' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Analyse' }));
+    await flush();
+    expect(jobPolls).toBe(1);
+    const statusReads = () =>
+      calls.filter((c) => c.url === '/api/session' && c.method === 'GET').length;
+    const before = statusReads();
+    typePassword('hunter2');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await flush();
+    expect(statusReads()).toBeGreaterThan(before);
+  });
+});
+
 describe('AnalyseGate on a not-analysed repo page', () => {
+  it('shows no password panel until the first status answer, so an unlocked visitor never sees it', async () => {
+    unlocked = true;
+    render(<AnalyseGate initialRepo="octo/repo" currentRepo="octo/repo" onDone={vi.fn()} />);
+    expect(screen.queryByLabelText(/demo password/i)).toBeNull();
+    await flush();
+    expect(screen.queryByLabelText(/demo password/i)).toBeNull();
+    expect(screen.getByLabelText(/github repository/i)).toBeTruthy();
+  });
+
+  it('starts the analysis once under StrictMode (the effect runs twice in development)', async () => {
+    const onDone = vi.fn();
+    render(
+      <StrictMode>
+        <AnalyseGate initialRepo="octo/repo" currentRepo="octo/repo" onDone={onDone} />
+      </StrictMode>,
+    );
+    await flush();
+    typePassword('hunter2');
+    fireEvent.click(screen.getByRole('button', { name: 'Unlock and analyse' }));
+    await flush();
+    expect(calls.filter((c) => c.url === '/api/analyze')).toHaveLength(1);
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
   it('asks only for the password with one "Unlock and analyse" button, then starts the analysis', async () => {
     const onDone = vi.fn();
     render(<AnalyseGate initialRepo="octo/repo" currentRepo="octo/repo" onDone={onDone} />);

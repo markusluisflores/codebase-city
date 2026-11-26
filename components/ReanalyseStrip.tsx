@@ -45,9 +45,11 @@ export function ReanalyseStrip({
   });
   const [confirming, setConfirming] = useState(false);
   const button = useRef<HTMLButtonElement>(null);
+  const region = useRef<HTMLElement>(null);
 
   const active = step.kind !== 'idle';
-  if (source !== 'live' || !(session.state === 'unlocked' || active || stale)) return null;
+  const canCheck = session.state === 'unlocked' || active;
+  if (source !== 'live' || !(canCheck || stale)) return null;
   const busy = step.kind === 'starting' || step.kind === 'running' || step.kind === 'done';
 
   const upToDate =
@@ -65,24 +67,26 @@ export function ReanalyseStrip({
   }
 
   return (
-    <section className={v.strip} aria-label="Re-analyse this repository">
-      <div className={v.stripRow}>
-        <button
-          ref={button}
-          type="button"
-          className={s.button}
-          aria-expanded={confirming}
-          disabled={busy}
-          onClick={() => setConfirming(true)}
-        >
-          Check for new commits
-        </button>
-        {analysesLeft !== null ? (
-          <span className={s.noteInline}>
-            {analysesLeft === 1 ? '1 analysis left today' : `${analysesLeft} analyses left today`}
-          </span>
-        ) : null}
-      </div>
+    <section ref={region} tabIndex={-1} className={v.strip} aria-label="Re-analyse this repository">
+      {canCheck ? (
+        <div className={v.stripRow}>
+          <button
+            ref={button}
+            type="button"
+            className={s.button}
+            aria-expanded={confirming}
+            disabled={busy}
+            onClick={() => setConfirming(true)}
+          >
+            Check for new commits
+          </button>
+          {analysesLeft !== null ? (
+            <span className={s.noteInline}>
+              {analysesLeft === 1 ? '1 analysis left today' : `${analysesLeft} analyses left today`}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
 
       {confirming ? (
         <div className={s.disclosure} onKeyDown={(e) => e.key === 'Escape' && cancel()}>
@@ -98,6 +102,7 @@ export function ReanalyseStrip({
               autoFocus
               onClick={() => {
                 setConfirming(false);
+                region.current?.focus(); // the confirm button is about to unmount; keep focus in the strip
                 void start(repo);
               }}
             >

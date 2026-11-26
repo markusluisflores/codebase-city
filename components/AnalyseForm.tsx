@@ -19,6 +19,7 @@ export function AnalyseForm({
   onDone,
   autoFocusRepo = false,
   autoStart = false,
+  onUnlocked,
 }: {
   initialRepo?: string;
   /** The `owner/name` the page already shows. When the finished analysis is for it, `onDone` runs instead of navigating. */
@@ -29,6 +30,8 @@ export function AnalyseForm({
   autoFocusRepo?: boolean;
   /** Starts analysing `initialRepo` on mount (the visitor just unlocked on that repo's page). */
   autoStart?: boolean;
+  /** Runs after an inline re-unlock (the session ended while the form was open). */
+  onUnlocked?: () => void;
 }) {
   const [repo, setRepo] = useState(initialRepo);
   const { step, setStep, start, analysesLeft } = useAnalyse({ currentRepo, onDone });
@@ -91,7 +94,10 @@ export function AnalyseForm({
       {step.kind === 'needPassword' ? (
         <UnlockPanel
           intro="Enter the demo password to analyse a repository."
-          onUnlocked={() => void start(repo)}
+          onUnlocked={() => {
+            onUnlocked?.();
+            void start(repo);
+          }}
           onFailure={(code) => setStep({ kind: 'error', code })}
         />
       ) : null}
