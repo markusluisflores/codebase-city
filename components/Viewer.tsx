@@ -16,7 +16,9 @@ import {
 import { districtBadges } from '@/lib/render/legend';
 import { districtTooltip, formatDay, shortSha, treemapTooltip } from '@/lib/viewer/model';
 import { CityCanvas, type CityCanvasHandle, type CityHit } from './CityCanvas';
+import { districtFileCounts } from '@/lib/render/labels';
 import { DetailsPanel } from './DetailsPanel';
+import { FolderList } from './FolderList';
 import { Legend } from './Legend';
 import { ReportCard } from './ReportCard';
 import { SearchBox } from './SearchBox';
@@ -50,6 +52,9 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
   const [view, setView] = useState<View>('3d');
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Folder list: `previewFolder` follows hover or focus, `chosenFolder` is the last click.
+  const [previewFolder, setPreviewFolder] = useState<string | null>(null);
+  const [chosenFolder, setChosenFolder] = useState<string | null>(null);
   // Checked once, up front: the viewer only renders in the browser (after the analysis loads).
   const [noWebGL, setNoWebGL] = useState(() => !canUseWebGL());
   const city = useRef<CityCanvasHandle>(null);
@@ -68,6 +73,32 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
   const badges = useMemo(() => districtBadges(districts), [districts]);
   const badgeByPath = useMemo(() => new Map(badges.map((b) => [b.path, b] as const)), [badges]);
   const badged = useMemo<ReadonlySet<string>>(() => new Set(badges.map((b) => b.path)), [badges]);
+
+  const districtPaths = useMemo(() => districts.map((d) => d.path), [districts]);
+  const folders = useMemo(() => {
+    const counts = districtFileCounts(districtPaths, paths);
+    return districtPaths.map((path) => ({ path, files: counts.get(path) ?? 0 }));
+  }, [districtPaths, paths]);
+  const highlightedFolder = previewFolder ?? chosenFolder;
+
+  const chooseFolder = useCallback(
+    (path: string) => {
+      // A tap fires hover and focus first and nothing clears them: drop the preview so the tint follows the choice.
+      setPreviewFolder(null);
+      if (chosenFolder === path) {
+        setChosenFolder(null);
+        return;
+      }
+      setChosenFolder(path);
+      // On phones the sheet would cover the district the camera flies to; focus follows it out.
+      if (sheetOpen) {
+        setSheetOpen(false);
+        sheetButton.current?.focus();
+      }
+      if (view === '3d' && !noWebGL) city.current?.flyToDistrict(path);
+    },
+    [chosenFolder, view, noWebGL, sheetOpen],
+  );
 
   const colourOf = useCallback(
     (path: string) => {
@@ -166,7 +197,14 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
         >
           {sheetOpen ? 'Hide report card and details' : 'Show report card and details'}
         </button>
-        <ReportCard report={report} selectedPath={selectedPath} onSelect={select} />
+        <ReportCard report={report} selectedPath={selectedPath} onSelect={select}>
+          <FolderList
+            folders={folders}
+            chosenPath={chosenFolder}
+            onPreview={setPreviewFolder}
+            onChoose={chooseFolder}
+          />
+        </ReportCard>
         <DetailsPanel
           file={selectedFile}
           selectedPath={selectedPath}
@@ -186,6 +224,7 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
               selectedPath={selectedPath}
               arcs={arcs}
               badgedDistricts={badged}
+              highlightedDistrict={highlightedFolder}
               onSelect={onCitySelect}
               tooltipText={cityTooltip}
               onError={() => setNoWebGL(true)}
@@ -196,6 +235,8 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
               colourOf={colourOf}
               selectedPath={selectedPath}
               badgedDistricts={badged}
+              districtPaths={districtPaths}
+              highlightedDistrict={highlightedFolder}
               tooltipText={treemapText}
               onSelect={(path) => {
                 setSelectedPath(path);
