@@ -6,7 +6,7 @@ Paste a public GitHub repo URL and get a 3D city plus a 2D treemap of its files.
 
 ## At a glance
 
-- **Gallery:** seven pre-analysed repos (express, vite, svelte, django, cargo, vue core, and this author's the-fourth-official) are static JSON in `public/gallery/`. Viewing them needs no password and runs no server work.
+- **Gallery:** seven pre-analysed repos (express, vite, svelte, django, cargo, vue core, and this author's the-fourth-official) are static JSON in `public/gallery/`. Viewing them needs no password and runs no server work. The home page also lists repos analysed live (marked Live), newest first, when a database is configured.
 - **Live analysis:** `POST /api/analyze` is behind a shared demo password. It checks GitHub for size and commit caps, then runs `git clone` and `git log` inside a disposable Vercel Sandbox, validates the result against a schema and caches it in Postgres. The viewer polls the job every 2 seconds.
 - **Viewer:** a Three.js instanced city (up to 5,000 buildings) and a canvas treemap over the same `Analysis`. 60 fps measured on a typical laptop with hardware acceleration (600 frames, p99 17 ms).
 - **Stack:** Next.js 16 (App Router, TypeScript), Three.js, d3-hierarchy, Zod, Neon Postgres, Vercel with Sandbox, Vitest.
@@ -24,7 +24,7 @@ Open `http://localhost:3000`. The gallery and the viewer work with no environmen
 
 | Variable         | Needed for                                    | Notes                                                                                                                 |
 | ---------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`   | cache, jobs, quota, login limit               | Any Postgres; apply `db/schema.sql` once                                                                              |
+| `DATABASE_URL`   | cache, jobs, quota, login limit               | Any Postgres; apply `db/schema.sql`, and re-apply it after pulling (it adds the `analyses.card` column; idempotent)   |
 | `GITHUB_TOKEN`   | GitHub API calls and `npm run build:gallery`  | Read-only, no scopes needed for public repos; optional locally, but unauthenticated GitHub allows 60 requests an hour |
 | `SESSION_SECRET` | signing the session cookie, hashing login IPs | At least 32 characters                                                                                                |
 | `DEMO_PASSWORD`  | the password gate                             | At least 16 characters                                                                                                |
@@ -70,7 +70,6 @@ Authors are shown by display name and a key. The key is the first 12 hex charact
 ## Future improvements
 
 - Re-analyse a cached repo behind the password (deferred; the viewer shows the date and commit it was analysed at).
-- List analysed repos in the home gallery (they are cached in the database but not listed).
 - District labels on the city floor and the treemap.
 - Rethink the add-a-repo and password flow (unlock first, or a dedicated "Add a repo" entry).
 - The legend covers about 45% of a phone screen; make it collapsible.

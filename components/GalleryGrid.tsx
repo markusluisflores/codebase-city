@@ -26,7 +26,10 @@ export function GalleryGrid({ cards }: { cards: readonly GalleryCard[] }) {
                 <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill={r.fill} />
               ))}
             </svg>
-            <span className={s.name}>{`${c.owner}/${c.name}`}</span>
+            <span className={s.name}>
+              {`${c.owner}/${c.name}`}
+              {c.live ? <span className={s.live}>Live</span> : null}
+            </span>
             <span className={s.meta}>
               <span>{c.language ?? 'Other'}</span>
               <span>{c.analysedOn}</span>

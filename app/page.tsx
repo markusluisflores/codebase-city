@@ -1,11 +1,15 @@
 import { AnalyseForm } from '@/components/AnalyseForm';
 import { GalleryGrid } from '@/components/GalleryGrid';
 import s from '@/components/gallery.module.css';
-import { listGalleryCards } from '@/lib/gallery';
+import { loadHomeCards } from '@/lib/home-gallery';
 
-// The gallery is committed JSON in public/gallery, so the page is rendered once at build time.
+// Curated cards come from committed JSON, live ones from Postgres. The page is regenerated at most once a
+// minute (the CDN serves it in between), so a repo analysed live shows up within about a minute without a
+// database read per visit. With no database the page is the curated gallery alone.
+export const revalidate = 60;
+
 export default async function Home() {
-  const cards = await listGalleryCards();
+  const cards = await loadHomeCards();
   return (
     <main id="main" tabIndex={-1} className={s.page}>
       <section className={s.hero}>
