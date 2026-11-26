@@ -29,18 +29,14 @@ Paste a public GitHub repo URL and get a 3D city plus a 2D treemap of its files,
 | Luminance test: minimum adjacent gap 0.1 | 0.03, plus a monotonic cold-to-hot check | The approved Night Ember ramp has adjacent gaps from 0.031 to 0.363 |
 | `ArcLayer.tsx` overlay for co-change arcs | Arcs drawn inside the Three.js scene (`lib/render/arcs.ts`) | An overlay needs per-frame projection of 3D points while orbiting; in-scene arcs follow the camera for free |
 | Ownership mode ranks the top 8 authors by file-touches | Ranks by files an author mainly owns | Accepted by Markus on 2026-11-18 |
-| A re-analyse option behind the password | Deferred (future improvement) | A cached POST for a gallery repo or an unchanged head cannot refresh anyway; not needed for v1 |
+| A re-analyse option behind the password | Deferred for v1, then built in PR 33 as "Check for new commits" (live analyses, unlocked visitors) | A cached POST for a gallery repo or an unchanged head cannot refresh anyway; Markus decided on it after first-use feedback |
 | 2D district hover tooltip | Landed in PR 20 | Task 15a had documented it as a decision to skip; reversed as a small follow-up |
 
 ## Future improvements and known limits
 
-Markus's first-use feedback on the PR 19 preview (2026-11-18, "works well, likes it") produced three of the items below (home gallery, district labels, password flow); as of 2026-11-25 each of those is in design or build in its own branch and none has merged. Re-analyse was a separate decision, deferred by Markus on 2026-11-18.
+Markus's first-use feedback on the PR 19 preview (2026-11-18, "works well, likes it") produced three of the items below (home gallery, district labels, password flow); as of 2026-11-26 all three are built and merged (PRs 29, 31 and 33). Re-analyse was a separate decision, deferred by Markus on 2026-11-18 and built in PR 33.
 
-* Re-analyse a cached repo behind the password (deferred by Markus, 2026-11-18).
-* Show analysed repos in the home gallery (they are in the database cache but not listed).
-* District labels on the city floor and the treemap.
-* Rethink the add-a-repo and password flow (unlock first, or a dedicated "Add a repo" entry).
-* Per-session limit on `POST /api/analyze`: GitHub calls happen before the quota check, so a password holder could use up the GitHub token's hourly limit (README, future improvements).
+* Built since this list was written: re-analyse a cached repo ("Check for new commits", PR 33), live analyses in the home gallery (PR 29), district labels (PR 31), unlock-first password flow (PR 33), and per-IP limits on `POST /api/analyze` (PR 30; 20 lookups an hour, 5 new analyses a day per IP), which closed the old "GitHub calls happen before the quota check" gap.
 * Probe that a spoofed `x-vercel-forwarded-for` header cannot defeat the login limit; the README still lists this as unverified after the deploy.
 * Sandbox network policy was checked with `curl` only; a clone under the policy, and that other hosts are blocked, were not separately proven (README, executor notes). Sandbox CPU time per job is not measured, so the quota caps are estimates.
 * Colour and accessibility: legend covers about 45% of a phone screen; two greys look alike under achromatopsia; the darkest hotspot colour is hard to see against the background (concept 11). Hand checks still owed: real phone touch, screen reader, true OS reduced-motion, forced-colours.
@@ -184,7 +180,7 @@ An honest, defensible answer, in order of weight:
 
 **The longer version:** the gallery is static JSON built ahead of time, so a view is about 1 to 3 MB of transfer (estimate) and no server work; 100 GB of Hobby bandwidth is about 30,000 views. The password gate protects the costly path from bots and strangers and could reuse the `DEMO_PASSWORD` and `SESSION_SECRET` pattern from the Fourth Official. It raises a tier question: the global tiering lists auth as Mandatory, so the design should decide whether a shared demo password counts.
 
-**Privacy note:** author keys in the data are pseudonymous: an unsalted 12-character hash of an email can be matched against a known address, so never describe them as anonymised or as "no personal data". Display names containing `@` are cut at the `@`, and visitor IPs for the login limit are kept only as keyed hashes for up to an hour.
+**Privacy note:** author keys in the data are pseudonymous: an unsalted 12-character hash of an email can be matched against a known address, so never describe them as anonymised or as "no personal data". Display names containing `@` are cut at the `@`, and visitor IPs are kept only as keyed hashes: for the login limit and the GitHub lookup counters up to an hour, and for the per-IP daily analysis counter up to a UTC day (Markus accepted a day on 2026-11-25, because a daily limit needs a daily window).
 
 **Interview talking point:** "Anyone can fly through pre-analysed cities for free. Pasting a new repo, the expensive and riskier part, is behind a shared password, which keeps costs and exposure bounded."
 

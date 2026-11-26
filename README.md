@@ -65,13 +65,10 @@ Full design: `docs/superpowers/specs/2026-11-13-codebase-city-design.md`. Archit
 
 ## Privacy: author keys are pseudonymous
 
-Authors are shown by display name and a key. The key is the first 12 hex characters of an unsalted SHA-256 hash of the author's normalised email. **That is pseudonymisation, not anonymisation.** Anyone who has a known email address can hash it and match it to a key, and display names are shown as git records them (a name containing `@` is cut at the `@`). No email address is stored or served, and no commit message is kept beyond a bug-fix count. For the login limit, visitor IPs are kept only as keyed hashes for up to an hour. The data comes from public repositories.
+Authors are shown by display name and a key. The key is the first 12 hex characters of an unsalted SHA-256 hash of the author's normalised email. **That is pseudonymisation, not anonymisation.** Anyone who has a known email address can hash it and match it to a key, and display names are shown as git records them (a name containing `@` is cut at the `@`). No email address is stored or served, and no commit message is kept beyond a bug-fix count. Visitor IPs are kept only as keyed hashes: up to an hour for the login limit and the GitHub lookup counters, up to a UTC day for the per-IP daily analysis counter. The data comes from public repositories.
 
 ## Future improvements
 
-- Re-analyse a cached repo behind the password (deferred; the viewer shows the date and commit it was analysed at).
-- District labels on the city floor and the treemap.
-- Rethink the add-a-repo and password flow (unlock first, or a dedicated "Add a repo" entry).
 - The legend covers about 45% of a phone screen; make it collapsible.
 - Two greys (others and no activity) look alike under achromatopsia.
 - Dependabot ignore rule for `@types/node` majors; TypeScript 7 is held until typescript-eslint supports it; ESLint 9 is deprecated, plan the move.
