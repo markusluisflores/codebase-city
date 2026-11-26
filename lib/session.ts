@@ -136,6 +136,33 @@ export async function requireSession(
   return ok ? null : jsonError('unauthorized');
 }
 
+/**
+ * What the visitor's own cookie says, for the UI's locked/unlocked display (`GET /api/session`). Never
+ * throws: a missing, forged, expired or unreadable cookie, or a misconfigured server, all read as locked.
+ * `expiresAt` is derived from the signed issue time, so it matches what `verifySessionToken` enforces.
+ */
+export async function sessionStatus(
+  req: Request,
+  env: Record<string, string | undefined> = process.env,
+  now = Date.now(),
+): Promise<{ unlocked: false } | { unlocked: true; expiresAt: string }> {
+  let secret: string;
+  try {
+    ({ secret } = assertSessionConfig(env));
+  } catch {
+    return { unlocked: false };
+  }
+  const token = readCookie(req.headers.get('cookie'), SESSION_COOKIE);
+  if (!(await verifySessionToken(secret, token, now))) return { unlocked: false };
+  const issuedAt = Number((token ?? '').split('.')[0]);
+  return { unlocked: true, expiresAt: new Date(issuedAt + SESSION_MAX_AGE_S * 1000).toISOString() };
+}
+
+/** `Set-Cookie` value that removes the session cookie (same name, path and flags, expired now). */
+export function clearedSessionCookieHeader(): string {
+  return `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
+}
+
 /** `Set-Cookie` value for a new session: HttpOnly, Secure, SameSite=Lax, host-only, with an expiry. */
 export function sessionCookieHeader(token: string): string {
   return `${SESSION_COOKIE}=${token}; Path=/; Max-Age=${SESSION_MAX_AGE_S}; HttpOnly; Secure; SameSite=Lax`;

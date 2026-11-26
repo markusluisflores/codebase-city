@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { errorMessage } from '@/lib/errors';
 import { useViewerState } from '@/lib/viewer/useViewerState';
-import { AnalyseForm } from './AnalyseForm';
+import { AnalyseGate } from './AnalyseGate';
 import { ErrorState } from './ErrorState';
 import { LoadingSkeleton } from './LoadingSkeleton';
 import { Viewer } from './Viewer';
@@ -12,6 +13,8 @@ import s from './viewer.module.css';
 /** Fetches the stored analysis and shows the matching state: skeleton, viewer, not-analysed prompt, or an error with retry. */
 export function ViewerLoader({ owner, repo }: { owner: string; repo: string }) {
   const [state, reload] = useViewerState(owner, repo);
+  // The analysedAt that was on screen when a re-analysis finished: if the reload still returns it, the CDN copy is stale.
+  const [replaced, setReplaced] = useState<string | null>(null);
   switch (state.kind) {
     case 'loading':
       return <LoadingSkeleton />;
@@ -20,7 +23,7 @@ export function ViewerLoader({ owner, repo }: { owner: string; repo: string }) {
         <main id="main" tabIndex={-1} className={s.state}>
           <h1>{`${owner.toLowerCase()}/${repo.toLowerCase()} is not analysed yet`}</h1>
           <p>{errorMessage('analysis_not_found')}</p>
-          <AnalyseForm
+          <AnalyseGate
             initialRepo={`${owner}/${repo}`}
             currentRepo={`${owner}/${repo}`}
             onDone={reload}
@@ -42,7 +45,19 @@ export function ViewerLoader({ owner, repo }: { owner: string; repo: string }) {
       );
     case 'ready':
       return (
-        <Viewer analysis={state.analysis} source={state.source} analysedAt={state.analysedAt} />
+        <Viewer
+          analysis={state.analysis}
+          source={state.source}
+          analysedAt={state.analysedAt}
+          reanalyse={{
+            onDone: () => {
+              setReplaced(state.analysedAt);
+              reload();
+            },
+            stale: replaced !== null && state.analysedAt === replaced,
+            onReload: reload,
+          }}
+        />
       );
   }
 }

@@ -20,6 +20,7 @@ import { districtFileCounts } from '@/lib/render/labels';
 import { DetailsPanel } from './DetailsPanel';
 import { FolderList } from './FolderList';
 import { Legend } from './Legend';
+import { ReanalyseStrip } from './ReanalyseStrip';
 import { ReportCard } from './ReportCard';
 import { SearchBox } from './SearchBox';
 import { ThinHistoryNote } from './ThinHistoryNote';
@@ -32,6 +33,11 @@ export interface ViewerProps {
   source: 'gallery' | 'live';
   /** ISO timestamp of the stored row; null for a gallery analysis (the window end is shown instead). */
   analysedAt: string | null;
+  /**
+   * Turns on "Check for new commits" for unlocked visitors on a live analysis. `onDone` reloads the data
+   * when a re-analysis finishes; `stale` says the reload still returned the previous analysis.
+   */
+  reanalyse?: { onDone: () => void; stale: boolean; onReload: () => void };
 }
 
 const MODE_LABEL: Record<ColourMode, string> = {
@@ -46,7 +52,7 @@ const MODE_LABEL: Record<ColourMode, string> = {
 type View = '3d' | '2d';
 
 /** The viewer for one stored analysis: top bar, report card, canvas with legend and picker, details. */
-export function Viewer({ analysis, analysedAt }: ViewerProps) {
+export function Viewer({ analysis, source, analysedAt, reanalyse }: ViewerProps) {
   const { repo, window: win, files, districts, report, stats } = analysis;
   const [mode, setMode] = useState<ColourMode>('hotspot');
   const [view, setView] = useState<View>('3d');
@@ -182,6 +188,18 @@ export function Viewer({ analysis, analysedAt }: ViewerProps) {
         </div>
         <SearchBox paths={paths} onSelect={select} />
       </header>
+
+      {reanalyse ? (
+        <ReanalyseStrip
+          repo={`${repo.owner}/${repo.name}`}
+          source={source}
+          analysedAt={analysedAt}
+          headSha={repo.headSha}
+          onDone={reanalyse.onDone}
+          stale={reanalyse.stale}
+          onReload={reanalyse.onReload}
+        />
+      ) : null}
 
       <p className={st.sr} role="status" aria-live="polite">
         {selectedPath === null ? '' : `Selected ${selectedPath}`}
