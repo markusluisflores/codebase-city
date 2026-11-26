@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js (App Router) and TypeScript strict, Vitest, zod, d3-hierarchy, Three.js, `@vercel/sandbox`, a Marketplace Postgres (Neon preferred), npm. Versions are whatever is current and at least two weeks old at scaffold time, pinned by the lockfile.
 
-**Spec:** `docs/superpowers/specs/2026-11-13-codebase-city-design.md` (approved 2026-11-13; revised 2026-11-17 to match Tasks 9 to 12b as built, see its section 15). Also read `docs/adr/ADR-001-host-on-vercel.md`. Where this plan's Tasks 9 to 12b text differs from section 15 of the spec, the spec governs; the sentences below are updated to match.
+**Spec:** `docs/superpowers/specs/2026-11-13-codebase-city-design.md` (approved 2026-11-13; revised 2026-11-17 to match Tasks 9 to 12b as built, and again 2026-11-26 to match PRs 26 to 33, see its section 15). Where a task below was changed after it merged, an "As built" note under it says so; the task text itself is the history. Also read `docs/adr/ADR-001-host-on-vercel.md`. Where this plan's Tasks 9 to 12b text differs from section 15 of the spec, the spec governs; the sentences below are updated to match.
 
 ## Global Constraints
 
@@ -16,7 +16,7 @@
 - Tier is Standard, plus `/security-review` on the ingestion boundary and the gate (Tasks 9 to 12b).
 - No Anthropic API, no AI feature. No repo content is ever checked out or executed. Clone with `--filter=blob:none --no-checkout`, hooks disabled.
 - Window: last 24 months before the repo's latest commit. Git history command uses `--no-merges --no-renames --name-only`; renamed files restart history (state in UI).
-- Caps (starting values): repo size 1 GB by API; 50,000 TOTAL commits (pre-clone, from the GitHub API, code `too_many_commits`); 20,000 commits IN THE WINDOW (post-clone, enforced by the job, code `too_many_commits_in_window`); 10,000 files at HEAD; 5,000 rendered buildings including per-district "other" buildings; 240 s analysis wall clock; 10 live analyses a day and 60 a month. A truncated GitHub tree is a hard reject.
+- Caps (starting values): repo size 1 GB by API; 50,000 TOTAL commits (pre-clone, from the GitHub API, code `too_many_commits`); 20,000 commits IN THE WINDOW (post-clone, enforced by the job, code `too_many_commits_in_window`); 10,000 files at HEAD; 5,000 rendered buildings including per-district "other" buildings; 240 s analysis wall clock; 10 live analyses a day and 60 a month (as built, also per-IP limits: 20 GitHub lookups an hour, 400 an hour for all clients, 5 new analyses a day; spec section 6). A truncated GitHub tree is a hard reject.
 - Cache: keyed by `(owner, name, schemaVersion)`; each row stores `headSha` and `analysedAt`; a re-analysis replaces the row. The viewer resolves the static gallery JSON, then the Postgres row, else the password prompt, and never calls GitHub or the Sandbox.
 - Heuristic thresholds exactly as spec section 8 (bug-fix regex, at least 3 changes for density, co-change: at most 30 files per commit, at least 3 shared commits, Jaccard at least 0.3, top 5 per file; single-owner district at least 80% of file-touches and at least 5 changes).
 - Every heuristic is labelled as a heuristic in the UI. No verdict on whether a repo is "well built".
@@ -24,7 +24,7 @@
 - No secret in the repo. `DEMO_PASSWORD`, `SESSION_SECRET`, `GITHUB_TOKEN`, database URL are sensitive Vercel variables. No local device path in any committed file.
 - Commits follow `~/.claude/standards/git-commit-standard.md`. Never commit to `main`; branches per section "Branches" below.
 - Docs diagrams use Mermaid. Tests never touch the network.
-- Logs and error responses carry error codes and repo names only, never raw stderr, `rawLog`, commit subjects or visitor IPs. Visitor IPs exist only as keyed hashes for up to an hour (not "no personal data").
+- Logs and error responses carry error codes and repo names only, never raw stderr, `rawLog`, commit subjects or visitor IPs. Visitor IPs exist only as keyed hashes, kept up to an hour (login attempts, lookup counters) or up to a UTC day (the per-IP daily analysis counter; Markus accepted this on 2026-11-25), never "no personal data".
 - Repo-derived strings (paths, author names, anything) render only as text; no `dangerouslySetInnerHTML` or `innerHTML` anywhere.
 
 ## Review Focus
@@ -81,7 +81,7 @@ lib/session.ts                         copied pattern from the-fourth-official
 lib/db/{client,cache,jobs,limits}.ts      database layer (Task 12a); lib/errors.ts maps codes to messages (Task 12b)
 lib/layout/{treemap,city}.ts           pure layout
 lib/render/{scene,colours,legend}.ts; lib/a11y.ts   luminance, flyToMode, canUseWebGL (Task 15b)
-app/{page,gate,r/[owner]/[repo]}/...   pages; app/api/{analyze,jobs/[id],session,analysis/[owner]/[name]}/route.ts; lib/api/ holds the handlers
+app/{page,r/[owner]/[repo]}/...   pages (`app/gate` was removed in PR 33); app/api/{analyze,jobs/[id],session,analysis/[owner]/[name]}/route.ts; lib/api/ holds the handlers
 scripts/build-gallery.ts               local gallery build (CLI)
 public/gallery/*.json                  committed gallery data
 tests/                                 mirrors lib/; tests/helpers/makeRepo.ts
@@ -210,6 +210,8 @@ Needs a Vercel account and a Marketplace Postgres; Markus creates them and suppl
 - [ ] **Step 2:** Implement; run tests. Sibling-reuse note: this is a deliberate copy of the existing pattern, domain-separated HMACs included.
 - [ ] **Step 3:** `/security-review`; commit `feat(auth): add shared-password gate for live analysis`.
 
+**As built (2026-11-26, PR 33):** there is no `app/gate/page.tsx`; the password panel opens in place on the home and repo pages (unlock first). `/api/session` also has `GET` (the caller's `{unlocked, expiresAt}`, public, `no-store`) and `DELETE` (Lock, clears the cookie, 204). Spec section 6 step 1 and section 10.
+
 ### Task 12a: Database layer (cache, jobs, quota, login attempts)
 
 **Files:** Create `lib/db/{client,cache,jobs,limits}.ts`, `db/schema.sql`; Test `tests/db/*.test.ts`.
@@ -218,6 +220,8 @@ Needs a Vercel account and a Marketplace Postgres; Markus creates them and suppl
 
 - [ ] **Step 1:** Failing tests (PGlite, real Postgres compiled to WASM, so the partial unique index and concurrency follow Postgres semantics; PGlite support for partial unique indexes is unverified, fall back to a Testcontainers Postgres if it fails; no network): `getCached` is keyed by `(owner, name, schemaVersion)` and a row with another schema version is not returned; `putCached` of a new head SHA replaces the row rather than adding one; the 11th analysis in a day is refused with `daily`, the 61st in a month with `monthly`, counters roll over at UTC midnight and month end; a job that fails before its Sandbox is created refunds its quota so the next analysis is allowed, while a job that failed after `markSandboxStarted` (or a stale sweep of one) keeps its unit (refund rule, Markus 2026-11-16: spec section 6, flow step 5); a second `createOrReuseJob` for the same repo while a job is in flight leaves the quota counters unchanged (reuse never reserves) and returns the same id; ten calls for one repo consume one unit; a job started at 23:59 UTC and failed after midnight releases the previous day's unit, not the new day's (the reservation date is stored on the job row); a job in a non-terminal phase 5 minutes and 1 second old reads as failed `timeout` (and 4 minutes 59 seconds does not); a killed job whose browser tab was closed (a non-terminal row 6 minutes old) is marked failed by the next `createOrReuseJob` for that repo, its quota is refunded if reserved and its Sandbox had not started, and a new job is created rather than the stale row being reused; a refused reservation leaves no reusable non-terminal row; the sweep of a row with `reserved = false` releases nothing, of a `reserved = true` row with `sandbox_started = false` releases once, and of a `sandbox_started = true` row releases nothing; two concurrent calls for the same repo create one row and one reservation; job ids are UUIDs; the 6th failed login from one IP within a minute makes `tooManyAttempts` true and an attempt after the one-minute window has passed is allowed, other IPs unaffected; a test inserts `203.0.113.9` and finds no stored value containing it, and the stored value equals the domain-separated HMAC; rows older than 1 hour are purged on the next insert.
 - [ ] **Step 2:** Implement the schema and functions; run tests; `/security-review`; commit `feat(db): add cache, job, quota and login attempt store`.
+
+**As built (2026-11-26, PRs 29 and 30):** `jobs` gained a nullable `ip_key` (hashed client IP, cleared when the job finishes), `analyses` gained a nullable `card jsonb` (home-page card), and `usage_counters` also holds the per-IP and global lookup counters and the per-IP daily analysis counter (`lk:` and `an:` keys, `lib/db/limits.ts`); `createOrReuseJob` takes the caller's IP key and returns `analysesLeft`. Both columns are `ADD COLUMN IF NOT EXISTS` lines in `db/schema.sql`. Spec section 6 "Per-client limits".
 
 ### Task 12b: API routes, flow and error mapping
 
@@ -229,6 +233,8 @@ Needs a Vercel account and a Marketplace Postgres; Markus creates them and suppl
 - [ ] **Step 2:** Implement the routes and mapping; run tests.
 - [ ] **Step 3:** `/security-review`; run an end-to-end live analysis on the Vercel preview created in Task 0; commit `feat(api): add analyze and job routes with error mapping`. Open the `feat/live-analysis` PR.
 
+**As built (2026-11-26, PRs 30 and 32):** `POST /api/analyze` checks the per-client lookup limit after the gallery check and before GitHub (`lookup_limit`, 429 with `Retry-After`), takes a per-IP daily unit (`analysis_limit`) before the global one, and a new job returns `{status:'job', id, analysesLeft}`. After `putCached` succeeds the job calls `revalidatePath('/')`. `errorMessage` covers two more codes, `lookup_limit` and `analysis_limit`. Spec sections 6 and 11.
+
 ### Task 13: Layout (`feat/viewer`)
 
 **Files:** Create `lib/layout/treemap.ts`, `lib/layout/city.ts`; Test `tests/layout/*.test.ts`.
@@ -237,6 +243,8 @@ Needs a Vercel account and a Marketplace Postgres; Markus creates them and suppl
 
 - [ ] **Step 1:** Failing tests: treemap areas sum to the container and are proportional to size within tolerance; no rectangles overlap; zero-size files get a minimum area, not NaN; 10,000 files yield at most 5,000 buildings in total, the per-district "other" buildings included; every district contains its buildings; every `Analysis.districts` path (from a fixture with depth 1 and 2 folders) appears as a district in the layout output, and no district deeper than depth 2 exists (files deeper than 2 belong to their depth-2 district; when `Analysis.districts` was truncated the layout may hold more districts than it, never fewer, and `(files)` pseudo-districts are allowed); a fixture with root files and a depth-1 folder holding both direct files and a depth-2 subfolder puts those files in `(files)` pseudo-districts; 10,000 files yield at most 5,000 rectangles from `treemap2D`; all-equal sizes give equal heights; an empty list returns empty output.
 - [ ] **Step 2:** Implement with d3-hierarchy; run tests; commit `feat(layout): add treemap and city layouts`.
+
+**As built (2026-11-26, PRs 26 and 27):** height is the square root of size relative to the 98th percentile of file size (not the maximum), clamped at 1, from `MIN_HEIGHT` 0.4 to `MAX_HEIGHT` 10 cells. The shared grid cell is floored at `MIN_CELL` 0.6; a district that cannot hold its grid at that floor has its treemap weight doubled and the layout restarts (at most 12 passes), so the district treemap is not exactly count-weighted. Spec section 9.
 
 ### Task 14: Rendering and colour modes
 
@@ -258,6 +266,8 @@ Needs a Vercel account and a Marketplace Postgres; Markus creates them and suppl
 - [ ] **Step 2:** Implement the page, panels and gallery home; toggle between 3D and 2D; search selects a building; the file link uses `githubFileUrl`.
 - [ ] **Step 3:** Commit `feat(viewer): add viewer page, details panel, search and report card`.
 
+**As built (2026-11-26, PRs 29, 31 and 33):** the home page lists the curated cards plus live analyses (24 in all, "Live" label, `revalidate = 60`) instead of the curated set alone; the side panel also has a collapsed Folders list (40 largest folders), and up to 12 district labels are drawn in 3D and 2D; a live analysis has a "Check for new commits" strip for unlocked visitors. Spec sections 5, 6 and 9.
+
 ### Task 15b: Arcs, states and accessibility
 
 **Files:** Create `components/{ArcLayer,ErrorState,ThinHistoryNote,AnalyseForm,LoadingSkeleton,EmptyGallery}.tsx`, `lib/a11y.ts`; Modify `app/r/[owner]/[repo]/page.tsx` (loading skeleton, fetch-failure retry, thin-history note, arcs, WebGL fallback), `app/page.tsx` (empty-gallery state) and `components/{SearchBox,ReportCard}.tsx` (keyboard selection and visible focus); Test `tests/components/*.test.tsx`, `tests/a11y.test.ts`.
@@ -267,6 +277,8 @@ Needs a Vercel account and a Marketplace Postgres; Markus creates them and suppl
 - [ ] **Step 1:** Failing tests: arcs render for the selected file only and for none when nothing is selected; each error code from spec section 11 renders its own message and no stack trace; a repo with under 20 window commits shows the thin-history note in every history-based mode (Review Focus 3); wrong password and the unauthenticated "enter the password to analyse" state render; polling shows each job phase in order; a loading skeleton renders while the Analysis fetches; a fetch failure renders an error with a retry button that refetches; an empty gallery (no files in the gallery JSON) renders an empty-gallery state; a path and an author name of `<img src=x onerror=alert(1)>` appear as literal text with no `img` element in the DOM; a 300-character path in a tooltip is cut to 200 characters; adjacent stops of every sequential legend differ in relative luminance by at least 0.1 and the categorical palettes (language, ownership) have no two equal colours; `flyToMode(true)` is `'jump'` and `flyToMode(false)` is `'animate'`; `canUseWebGL()` mocked false renders the 2D treemap with the message; search results and report-card entries are focusable and Enter selects them.
 - [ ] **Step 2:** Implement; check by hand and record: touch (orbit, pinch-zoom and tap-to-select work on a phone or emulator), keyboard-only use, reduced-motion setting, and focus visibility. The colour-blind-safe palettes are checked by the luminance test plus a visual pass through a colour-vision simulator.
 - [ ] **Step 3:** Run `pre-pr-review` and open the `feat/viewer` PR; commit `feat(viewer): add arcs, states and accessibility`.
+
+**As built:** arcs are drawn inside the Three.js scene (`lib/render/arcs.ts`, `setArcs` on the scene), so there is no `ArcLayer.tsx`; the sequential-legend luminance test uses a minimum adjacent gap of 0.03, not 0.1 (the approved ramp's gaps run from 0.031 to 0.363; `tests/a11y.test.ts`). Both were decided during the build and are listed in `docs/project-reviewer.md`.
 
 ### Task 16: Gallery, deploy, packaging (`chore/ship-gallery`)
 
