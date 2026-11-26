@@ -331,6 +331,93 @@ describe('job lifecycle', () => {
   });
 });
 
+describe('home page refresh after a stored analysis', () => {
+  it('revalidates "/" once, after the analysis and its card are stored and before the job reads done', async () => {
+    const calls: string[] = [];
+    let readBack: Promise<unknown> | undefined;
+    const h = harness({
+      revalidate: (path) => {
+        calls.push(path);
+        // Queries run in order on one connection, so this read sees the state at the call.
+        readBack = t.pg.query<{ card: unknown; phase: string }>(
+          `SELECT (SELECT card FROM analyses LIMIT 1) AS card, (SELECT phase FROM jobs LIMIT 1) AS phase`,
+        );
+      },
+    });
+    await handleAnalyze(await post({ repo: 'octo/repo' }), h.deps);
+    await drain(h);
+    expect(calls).toEqual(['/']);
+    const row = ((await readBack) as { rows: { card: unknown; phase: string }[] }).rows[0]!;
+    expect(row.card).not.toBeNull();
+    expect(row.phase).not.toBe('done');
+    expect(await jobRow()).toMatchObject({ phase: 'done' });
+  });
+
+  it('does not revalidate when the write fails', async () => {
+    const revalidate = vi.fn();
+    const h = harness({ revalidate });
+    await handleAnalyze(await post({ repo: 'octo/repo' }), h.deps);
+    const real = pgAdapter(t.pg);
+    setDb({
+      query: async (text, params) => {
+        if (text.includes('INSERT INTO analyses')) throw new Error('disk full');
+        return real.query(text, params);
+      },
+    });
+    await drain(h);
+    setDb(real);
+    expect(revalidate).not.toHaveBeenCalled();
+  });
+
+  it('does not revalidate for a job swept to failed (nothing was written)', async () => {
+    const revalidate = vi.fn();
+    const sb = fakeSandbox({
+      beforeOutput: async () => {
+        await t.pg.query(`UPDATE jobs SET phase = 'failed', error_code = 'timeout'`);
+      },
+    });
+    const h = harness({ revalidate }, sb);
+    await handleAnalyze(await post({ repo: 'octo/repo' }), h.deps);
+    await drain(h);
+    expect(revalidate).not.toHaveBeenCalled();
+  });
+
+  it('a throwing revalidate does not fail the job, and the default is safe outside a request scope', async () => {
+    const h = harness({
+      revalidate: () => {
+        throw new Error('Invariant: static generation store missing');
+      },
+    });
+    const res = await handleAnalyze(await post({ repo: 'octo/repo' }), h.deps);
+    expect((await res.json()).status).toBe('job');
+    await drain(h);
+    expect(await jobRow()).toMatchObject({ phase: 'done', error_code: null });
+    expect(await getCached('octo', 'repo', SCHEMA_VERSION)).not.toBeNull();
+    expect(logs.join()).toContain('revalidate_failed');
+
+    // No injected revalidate: the real Next.js call throws outside a request, and is swallowed.
+    const h2 = harness();
+    h2.deps.revalidate = undefined;
+    await t.reset();
+    setDb(pgAdapter(t.pg));
+    await handleAnalyze(await post({ repo: 'octo/repo' }), h2.deps);
+    await expect(drain(h2)).resolves.toBeUndefined();
+    expect(await jobRow()).toMatchObject({ phase: 'done' });
+  });
+
+  it('a re-analysis revalidates once more after replacing the row', async () => {
+    await putCached(sampleAnalysis('Octo', 'Repo', SHA), NOW);
+    const revalidate = vi.fn();
+    const h = harness({ revalidate });
+    h.fetchFacts.mockResolvedValue(facts({ headSha: SHA2 }));
+    await handleAnalyze(await post({ repo: 'octo/repo' }), h.deps);
+    await drain(h);
+    expect(revalidate).toHaveBeenCalledTimes(1);
+    expect(revalidate).toHaveBeenCalledWith('/');
+    expect((await getCached('octo', 'repo', SCHEMA_VERSION))?.analysis.repo.headSha).toBe(SHA2);
+  });
+});
+
 describe('refund line: only a failure before the Sandbox is created refunds, exactly once', () => {
   async function run(sb: ReturnType<typeof fakeSandbox>, over: Partial<AnalyzeDeps> = {}) {
     const h = harness(over, sb);

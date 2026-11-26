@@ -1,3 +1,4 @@
+import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
 import { SCHEMA_VERSION } from '@/lib/analysis/schema';
 import type { Analysis } from '@/lib/analysis/types';
@@ -19,6 +20,8 @@ export interface AnalyzeDeps {
   sandbox?: RunnerDeps;
   /** Runs the long work after the response is sent. Defaults to Next.js `after`. */
   schedule?: (work: () => Promise<void>) => void;
+  /** Marks a page stale once an analysis is stored. Defaults to Next.js `revalidatePath`. */
+  revalidate?: (path: string) => void;
   now?: () => Date;
   deadlineMs?: number;
   env?: Record<string, string | undefined>;
@@ -220,6 +223,15 @@ export async function runLiveJob(
   } catch {
     await fail('db_write_failed');
     return;
+  }
+  // The analysis and its home-page card are stored (a re-analysis replaced both): mark the home page
+  // stale so the next visit regenerates it instead of waiting out `revalidate = 60`. It runs before the
+  // job reads `done`, so a user who follows the finished job to the home page sees the new card.
+  // Best effort: an unavailable revalidation (no request scope, a cache error) never fails the job.
+  try {
+    (deps.revalidate ?? revalidatePath)('/');
+  } catch {
+    logCode('revalidate_failed', 'internal_error', repoLabel);
   }
   await setJobPhase(id, 'done').catch(() => undefined);
 }
