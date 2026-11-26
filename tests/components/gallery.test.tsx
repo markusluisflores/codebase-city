@@ -42,3 +42,13 @@ describe('GalleryGrid', () => {
     expect(screen.getByText(/no repos in the gallery yet/i)).toBeTruthy();
   });
 });
+
+describe('GalleryGrid live label', () => {
+  it('marks a live card and leaves a curated card unlabelled', () => {
+    const curated = galleryCard(viewerAnalysis());
+    const live = { ...curated, owner: 'live', name: 'one', live: true };
+    render(<GalleryGrid cards={[curated, live]} />);
+    expect(screen.getAllByText('Live')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: /live\/one/ })).toBeTruthy();
+  });
+});

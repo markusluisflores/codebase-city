@@ -1,7 +1,7 @@
 # Codebase City: Interview Guide
 
-**Last updated:** 2026-11-18
-**Last plan covered:** `docs/superpowers/plans/2026-11-13-codebase-city.md`, Tasks 0 to 16 (built and merged through the viewer, PR 19 and PR 20; Task 16, the gallery and packaging, is on the open `chore/ship-gallery` PR). Production deploy: not yet done; owed to Markus.
+**Last updated:** 2026-11-25
+**Last plan covered:** `docs/superpowers/plans/2026-11-13-codebase-city.md`, Tasks 0 to 16, all merged (viewer PR 19 and PR 20, gallery and packaging PR 21), plus the two post-launch fixes PR 26 (height scale) and PR 27 (layout cell). Production is live at <https://codebase-city-spike.vercel.app>. Sections 1 to 6 below were first written on 2026-11-18; entries 7 to 12, the process and bug sections were added on 2026-11-25 from the executor notes and PRs.
 
 Everything here is drawn from the project's own artifacts: `docs/requirements-seed.md`, `docs/adr/ADR-001-host-on-vercel.md`, and the 2026-11-13 design conversation. Claims from web sources are marked **verified** (read on the vendor's own page or measured by us), **secondary** (a blog or aggregator) or **unverified**. Re-check any of them before quoting a number in an interview.
 
@@ -11,14 +11,15 @@ Everything here is drawn from the project's own artifacts: `docs/requirements-se
 
 Paste a public GitHub repo URL and get a 3D city plus a 2D treemap of its files, coloured by hotspot, churn, age, bug-fix density, language and ownership, with co-change arcs for the selected file and a report card of files to read first. The honest value statement from the seed: real but modest, mainly for unfamiliar repos. It is a portfolio showcase.
 
-**Built and measured (as of 2026-11-18):**
+**Built and measured (figures dated 2026-11-18 unless stated):**
 
-* Seven gallery repos, pre-analysed to static JSON: express, vite, svelte, django, cargo, vue core and the-fourth-official. `facebook/react` was chosen too but has moved to `react/react` and is about 1.1 GB on GitHub, over the 1 GB cap, so it was dropped, not substituted.
+* Live in production since 2026-11-19 on Vercel Hobby (see concept 7). Markus's live check afterwards: everything works; after PR 27 he said the city "looks much better" (executor notes).
+* Seven gallery repos, pre-analysed to static JSON: express, vite, svelte, django, cargo, vue core and the-fourth-official. `facebook/react` was chosen too but now redirects to `react/react` (the GitHub API answers 301, which the build treats as not found) and is about 1.15 GB (1,151,225 KB) on GitHub, over the 1,048,576 KB cap, so it was dropped, not substituted.
 * Analysis size: the largest gallery file is `sveltejs/svelte` at 2,677,731 bytes (2.55 MiB, about 32% of the 8 MiB bound; the bound was owed a re-measure in Task 9). Others: django 1.83 MB, cargo 0.88 MB, vite 0.86 MB, vue core 0.22 MB, express 0.06 MB, the-fourth-official 0.04 MB. So real repos near the 10,000-file cap stay well under the bound; only a dense synthetic case approaches it.
 * Rendering: 60 fps measured on a typical laptop with hardware acceleration (600 frames, p99 17 ms), auto-orbit, 5,000 buildings, hotspot colouring (Markus, one run, 2026-11-17).
-* Load: on a local dev server, the svelte analysis (2.68 MB, uncompressed) is fetched in about 0.15 s and the viewer page is interactive in about 2 s from a cold navigation (software-rendered browser pane, dev mode); both 2D and 3D views load. Production figures are not yet measured.
+* Load: on a local dev server, the svelte analysis (2.68 MB, uncompressed) is fetched in about 0.15 s and the viewer page is interactive in about 2 s from a cold navigation (software-rendered browser pane, dev mode); both 2D and 3D views load. Production load figures are not measured.
 * Gate: with no cookie the gallery, viewer page and `/api/analysis/...` return 200; `POST /api/analyze` and `GET /api/jobs/...` return 401 (checked locally with fake secrets).
-* Tests: 43 files, 824 tests; a test fails if a gallery file has an out-of-date `schemaVersion`.
+* Tests: 43 files, 824 tests as of 2026-11-18 (PR 26 and PR 27 added more; recount before quoting); a test fails if a gallery file has an out-of-date `schemaVersion`.
 * Odd result worth knowing: the vite card shows "Image" as its top language (by bytes), a side effect of language-by-extension.
 
 ## Spec deviations (decided during the build)
@@ -31,20 +32,26 @@ Paste a public GitHub repo URL and get a 3D city plus a 2D treemap of its files,
 | A re-analyse option behind the password | Deferred (future improvement) | A cached POST for a gallery repo or an unchanged head cannot refresh anyway; not needed for v1 |
 | 2D district hover tooltip | Landed in PR 20 | Task 15a had documented it as a decision to skip; reversed as a small follow-up |
 
-## Future improvements
+## Future improvements and known limits
 
-* Re-analyse a cached repo behind the password.
+Markus's first-use feedback on the PR 19 preview (2026-11-18, "works well, likes it") produced three of the items below (home gallery, district labels, password flow); as of 2026-11-25 each of those is in design or build in its own branch and none has merged. Re-analyse was a separate decision, deferred by Markus on 2026-11-18.
+
+* Re-analyse a cached repo behind the password (deferred by Markus, 2026-11-18).
 * Show analysed repos in the home gallery (they are in the database cache but not listed).
 * District labels on the city floor and the treemap.
 * Rethink the add-a-repo and password flow (unlock first, or a dedicated "Add a repo" entry).
-* Legend covers about 45% of a phone screen; greys that look alike under achromatopsia.
+* Per-session limit on `POST /api/analyze`: GitHub calls happen before the quota check, so a password holder could use up the GitHub token's hourly limit (README, future improvements).
+* Probe that a spoofed `x-vercel-forwarded-for` header cannot defeat the login limit; the README still lists this as unverified after the deploy.
+* Sandbox network policy was checked with `curl` only; a clone under the policy, and that other hosts are blocked, were not separately proven (README, executor notes). Sandbox CPU time per job is not measured, so the quota caps are estimates.
+* Colour and accessibility: legend covers about 45% of a phone screen; two greys look alike under achromatopsia; the darkest hotspot colour is hard to see against the background (concept 11). Hand checks still owed: real phone touch, screen reader, true OS reduced-motion, forced-colours.
+* Heuristics, not truth: rename history splits (rename detection is off), bug-fix density is a regex over commit subjects, a 24-month window (README, known limitations).
 * Dependabot ignore rule for `@types/node` majors; TypeScript 7 held until typescript-eslint supports it; ESLint 9 deprecation.
 
 ## 2. Tech stack
 
 | Layer | Choice | Status |
 | ----- | ------ | ------ |
-| Hosting | Vercel (ADR-001) | Decided 2026-11-13 |
+| Hosting | Vercel (ADR-001) | Decided 2026-11-13; production deployed 2026-11-19 on Hobby |
 | Git analysis | Plain TypeScript module, run inside a Vercel Sandbox | Built (Tasks 3 to 9); Sandbox spike passed 2026-11-14 |
 | Database / cache | Postgres via a Vercel Marketplace partner; Neon (see the note below the table) | Neon chosen as lowest-effort option, 2026-11-17 |
 | Front end | Next.js with Three.js and a 2D treemap | Built (Tasks 13 to 15b, PR 19 and PR 20) |
@@ -73,7 +80,7 @@ The Vercel design is **B-shaped (ADR-001 calls it B3)**: one Next.js app, no que
 | Databases | Partner Postgres via Marketplace (no Postgres of its own) | Postgres and Redis as services beside your app, private network |
 | Running git on untrusted repos | Needs Vercel Sandbox (disposable microVM per job) | Plain container, or Railway Sandboxes (reported opt-in beta, unverified) |
 | Idle cost | $0 | Uses resources while running; Serverless setting can sleep a service after about 10 minutes idle |
-| Pricing (verified from Vercel's pricing page) | Hobby $0. Pro $20 a month per developer seat, with a $20 usage credit | Markus pays $5 a month (Hobby). Credit and per-resource rates not re-checked |
+| Pricing (verified from Vercel's pricing page) | Hobby $0. Pro $20 a month per developer seat, with a $20 usage credit | Markus pays $5 a month (Railway Hobby plan). Credit and per-resource rates not re-checked |
 | Over the limit | Hobby: hard cap, feature pauses, no bill. Pro: pay-as-you-go, uncapped | Billed by usage |
 | Function limits | Hobby 300 s default and max; Pro 800 s max (a beta 1800 s exists) (secondary) | None for a container beyond your own timeout |
 | MCP server | Yes, official remote server at `mcp.vercel.com`, OAuth (secondary) | Yes, the Railway MCP (used in other projects) |
@@ -181,6 +188,56 @@ An honest, defensible answer, in order of weight:
 
 **Interview talking point:** "Anyone can fly through pre-analysed cities for free. Pasting a new repo, the expensive and riskier part, is behind a shared password, which keeps costs and exposure bounded."
 
+### 7. Production deploy: one shared database, existing secrets
+
+**Simple version:** for a demo, I moved into the house with the furniture I already had instead of buying a second set for the guest room.
+
+**The longer version:** Production went live on 2026-11-19 at `codebase-city-spike.vercel.app` on Vercel Hobby. Production and Preview share the same Neon database and reuse the existing secrets. Markus decided this on 2026-11-19, the day of the first production deploy, as the simplest route for a demo; a separate database for Production was the cleaner alternative he declined (executor session confirmation, 2026-11-25). Preview and Production use the same `DATABASE_URL` (`vercel env ls` shows it set for Development, Preview and Production), so a Preview deploy can read and write production cache, jobs and quota rows, and a bad preview build can affect the live site. `docs/deployed-services.md` in the workspace was updated at deploy time.
+
+**Interview talking point:** "I shared one Neon database and the existing secrets between Production and Preview because it was the simplest route for a demo. I know the clean answer is a separate database for Production, and I'd do that before real users: a preview should not be able to touch production rows."
+
+### 8. Scaling height: the 98th percentile, not the maximum (PR 26)
+
+**Simple version:** if one skyscraper is 500 times taller than everything else, a city drawn to fit it makes every other building a paving stone.
+
+**The longer version:** building height was `sqrt(size / largest file)`. On cargo the largest file is 2,449,408 B, the 98th percentile is 50,759 B and the median is 673 B, so the median building was 0.41 cells tall and the city looked flat. The fix uses the 98th-percentile size as the reference, caps the share at 1 and raises the minimum height from 0.25 to 0.4. Cargo's median went from 0.41 to 1.51 cells; about 2% of buildings share the maximum height by design (cargo: 62 of 3,092). For 50 files or fewer the percentile equals the maximum, so small repos behave as before. Not tuned beyond cargo, django, express, svelte, vite and vue core. Evidence: PR 26 and `height-scaling-report.md` in the executor notes.
+
+**Interview talking point:** "A single outlier file was setting the scale for the whole city. I switched the reference to the 98th percentile and clamped, so the biggest few percent of files tie at the top and everything else uses the range. It's a judgment call I validated on six repos, not a tuned constant."
+
+### 9. The layout cell collapse (PR 27): a bug the tests were blind to
+
+**Simple version:** the fix for "buildings are too short" didn't work, because the real problem was the plot size they stood on, and my tests measured everything in plot units.
+
+**The longer version:** after PR 26 cargo still rendered flat. The city layout shrinks one shared building cell by a factor of 0.9 until every district's grid fits. Cargo has `tests/build-std`, a one-file district squeezed beside the huge `tests/testsuite` into a sliver about 79.6 x 0.006 world units. It could never fit, so the loop ran 31 times and the cell ended at 0.038 on a 110.6-unit floor: buildings about 1/3,000 of the floor width, tallest 0.38 where 10 was intended. Other repos shrank 1 to 8 steps for the same reason (1 to 2 file districts such as `.github/actions`), so they were dim copies of the same bug. The loop's 200-step guard was never reached, so nothing flagged it. Fix: floor the shared cell at 0.6, and give a district that still cannot fit at the floor double treemap weight and re-run the layout (at most 12 passes), with a last-resort per-district cell that fuzzing of 3,600 cities never reached. Cargo's cell went from 0.038 to 1.00 and its tallest building from 0.38 to 10.0; django and express were byte-identical before and after.
+
+**Lesson:** the PR 26 tests asserted heights in cell units, so they passed while the world-unit result was wrong. Assert on the quantity a viewer sees (size relative to the floor), not only on the intermediate. Second lesson: PR 26 was expected to fix cargo and did not; the executor notes record telling Markus so.
+
+**Interview talking point:** "My first fix passed its tests and didn't fix the picture. The tests were in cell units and the defect was in world units: one 0.006-wide sliver district made a shrink loop run 31 times. I reproduced it on the real repo, floored the cell and gave districts that can't fit more area, and compared before and after numbers across all seven gallery repos."
+
+### 10. Quota refunds: refund only before the Sandbox exists
+
+**Simple version:** if the restaurant never cooked your meal you get your token back; if the kitchen cooked it and you dropped it, the token is spent.
+
+**The longer version:** live analyses reserve one unit of a shared quota that protects the Hobby Sandbox allowance. The first design refunded the unit on any late failure. The security reviewer on the DB layer flagged that this lets a password holder burn Sandbox CPU with deliberately failing runs while the counters stay at zero. Markus decided on 2026-11-16 (binding, spec section 6 and section 15): refund only when the run fails before the Sandbox is created; every failure after that keeps the unit, and a `timeout` always keeps it. A `sandbox_started` flag on the job row is written when `create()` returns, and `failJob` releases in one row-locked statement, so a release happens exactly once. Known accepted gap: if the database is down for both the flag write and the failing write, the stale-job sweep later refunds that one unit.
+
+**Interview talking point:** "A refund rule is a security decision. Refunding every failure meant failing runs were free, so I refunded only what never reached the Sandbox. I put the rule in one row-locked statement so it can't double-refund, and wrote down the one edge case I accepted."
+
+### 11. Night Ember palette and accessibility choices
+
+**Simple version:** heat colours that go from cold purple to hot yellow, with a text legend, because colour alone is not enough.
+
+**The longer version:** the sequential modes (hotspot, churn, age, bug-fix) use the Night Ember ramp `#280b54 #65156e #9f2a63 #d44842 #f57d15 #fac127 #fcffa4`, an inferno-style ramp chosen on 2026-11-17 for legibility on a dark background; language and ownership use the colour-blind-safe Okabe-Ito categorical palette. The spec's luminance test (minimum adjacent gap 0.1) was changed to 0.03 plus a monotonic cold-to-hot check, because the approved ramp's adjacent gaps run from 0.031 to 0.363. A later pass (`pr19-verify-report.md`) found a keyboard-only pass and a reduced-motion pass (using a `matchMedia` override, not the OS setting) both passing, and found real defects: Escape did not close the phone sheet after tapping the canvas, and the "no activity" grey is hard to tell from the 0.50 hotspot colour under achromatopsia (dE2000 about 3). The darkest ramp colour has about 1.05:1 contrast with the page background (`task-14-report.md`), so low-score buildings are dim. Legends and tooltips carry the meaning in text, so colour is never the only channel. Brightening the dark end would drop its gap to the next stop below the 0.03 threshold, so it needs a ramp redesign, not a tweak (`height-scaling-report.md`).
+
+**Interview talking point:** "I treated accessibility as testable: a luminance-gap test on the ramp, colour-blind-safe categorical colours, and a text legend. I also lowered the test threshold on purpose and recorded why. Verification found a real keyboard bug and a grey that collapses under achromatopsia, which is on the improvements list rather than hidden."
+
+### 12. Gallery selection
+
+**Simple version:** the gallery is a curated set; a repo that can't pass the same limits as a live analysis doesn't get in.
+
+**The longer version:** eight repos were chosen and seven shipped (express, vite, svelte, django, cargo, vue core, the-fourth-official). `facebook/react` was dropped, not substituted, for the two reasons in section 1: it redirects to `react/react`, and at about 1.15 GB it is over the 1 GB cap, so it would fail the live path too. The build uses unauthenticated GitHub (about 29 s for all eight). A gallery repo is served as a cache hit with no GitHub call, no quota use and no re-analysis. The vite card shows "Image" as its top language, a known side effect of language-by-extension.
+
+**Interview talking point:** "I dropped React from the gallery instead of swapping in something similar, because it was over my own size cap. A showcase that breaks its own limits is a worse story than seven repos that all pass."
+
 ---
 
 ## 5. Engineering process
@@ -189,10 +246,16 @@ An honest, defensible answer, in order of weight:
 * The first branch is `docs/requirements-seed`, not `main`; implementation starts only after the design doc is approved.
 * Decisions are recorded as ADRs before moving on (ADR-001: hosting).
 * Research before committing: the blobless clone, hosting limits and incident history were looked up and measured, with unverified claims labelled.
+* **Review lanes.** Full lane (Standard and Mandatory work): fresh review rounds until the last two each leave 0 open blockers, every fix verified. Light lane (docs, small changes): one fresh round, every fix verified, no second blocker event. PR 26 and PR 27 ran Full: PR 27 had a fresh round 1, a resumed re-check, and an independent fresh round 2 that fuzzed 3,600 cities and left 0 blockers.
+* **Why the original reviewer re-checks.** A fixer's own re-run proves the tests pass, not that the finding is closed. Where it ran as designed it paid off: on the DB layer the resumed security check found a new issue introduced by a fix (a release that could fire twice on a lost response), fixed in 8246b98. Honest gaps: for Task 10 the notes say a blocker fix got no resumed check and had to be verified at whole-branch review; for Tasks 15b and 16 the "resumed check" was the author re-running lint, typecheck and tests, which is weaker than a re-check by the reviewer.
+* **What review missed and later work found.** The viewer passed review, and a later verification pass found the Escape bug and the achromatopsia grey (concept 11). The height fix passed two review rounds and still left cargo flat (concept 9). Review reads the diff; only running the real repo showed the picture was wrong.
+* **Reviewers' parked findings are recorded, not hidden.** Examples: no test reaches the layout fallback branch (PR 27), spec line 131 still says "square-root scale" and a count-weighted treemap (a spec revision needs its own docs branch).
 
 ## 6. Bugs and lessons
 
-None yet. One early lesson: an assumption about "which projects are deployed where" was wrong until the deployed-services file was read. Check the record before reasoning from memory.
+* **Cargo renders flat (PR 26 then PR 27).** Symptom: tiny buildings. Investigation: reproduced the height scale on real percentiles, shipped the 98th-percentile fix, found cargo still flat. Root cause: a layout shrink loop driven by a 0.006-wide sliver district. Fix: cell floor plus extra weight for districts that cannot fit. Prevention: compare before and after in world units on every gallery repo (concepts 8 and 9).
+* **Refund loophole (DB layer review).** Symptom: none in production; a reviewer saw that failing runs were free. Fix and rule: concept 10.
+* **Early lesson:** an assumption about which projects are deployed where was wrong until the deployed-services file was read. Check the record before reasoning from memory.
 
 ---
 
@@ -205,7 +268,12 @@ None yet. One early lesson: an assumption about "which projects are deployed whe
 | How did you decide how to read git history? | Concept 3 |
 | What does this cost to run, and what happens if it gets popular? | Concept 4 and concept 6 |
 | What would make you switch? | ADR-001, "What would change this decision" |
-| What's still unproven? | Production behaviour (not yet deployed), Sandbox CPU time per job, and untested corners of the spike (Fluid compute off, the 300 s limit itself, git clone under the network policy). Settled by the 2026-11 spike: start-up 0.52 s, limits, a continuation to 270 s, egress policy, Hobby terms (personal or non-commercial). Settled: the tier is Standard, confirmed by Markus on 2026-11-13, with a security review on the gate |
+| Why share one database between Production and Preview? | Concept 7 |
+| Cargo looked flat; what happened? | Concepts 8 and 9, section 6 |
+| Can someone with the password burn your quota? | Concept 10 |
+| How accessible is it, honestly? | Concept 11, "Future improvements and known limits" |
+| How do you review, and what did review miss? | Section 5 |
+| What's still unproven? | Production load figures, Sandbox CPU time per job, and untested corners of the spike (Fluid compute off, the 300 s limit itself, git clone under the network policy). Settled by the 2026-11 spike: start-up 0.52 s, limits, a continuation to 270 s, egress policy, Hobby terms (personal or non-commercial). Settled: the tier is Standard, confirmed by Markus on 2026-11-13, with a security review on the gate |
 
 ## 8. Sources
 

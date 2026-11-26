@@ -1,5 +1,6 @@
 import { parseAnalysis } from '@/lib/analysis/schema';
 import type { Analysis } from '@/lib/analysis/types';
+import { galleryCard, type GalleryCard } from '@/lib/gallery-cards';
 import { getDb } from './client';
 
 // GitHub owner and repo names are case-insensitive, so the key is stored lower-case.
@@ -54,5 +55,37 @@ export async function putCached(analysis: Analysis, now: Date): Promise<void> {
       now.toISOString(),
       JSON.stringify(valid),
     ],
+  );
+  // The home-page card is best effort: it must never fail or undo an analysis (the column may not be
+  // migrated yet, or the card may not build). A missing card is filled in later by the home page.
+  try {
+    await putCard(valid.repo.owner, valid.repo.name, valid.schemaVersion, galleryCard(valid, now));
+  } catch {
+    // On a re-analysis the row still holds the previous analysis's card. Clear it (best effort) so
+    // the home page backfills a fresh one instead of showing a stale card; see lib/db/cards.ts.
+    try {
+      await getDb().query(
+        `UPDATE analyses SET card = NULL WHERE owner = $1 AND name = $2 AND schema_version = $3`,
+        [keyPart(valid.repo.owner), keyPart(valid.repo.name), valid.schemaVersion],
+      );
+    } catch {
+      // The column may not exist at all; nothing more to do.
+    }
+  }
+}
+
+/** Stores the home-page card for a row; `onlyIfNull` keeps a card a concurrent re-analysis already wrote (throws on a database error, for example an unmigrated table). */
+export async function putCard(
+  owner: string,
+  name: string,
+  schemaVersion: number,
+  card: GalleryCard,
+  opts: { onlyIfNull?: boolean } = {},
+): Promise<void> {
+  await getDb().query(
+    `UPDATE analyses SET card = $4::jsonb WHERE owner = $1 AND name = $2 AND schema_version = $3${
+      opts.onlyIfNull ? ' AND card IS NULL' : ''
+    }`,
+    [keyPart(owner), keyPart(name), schemaVersion, JSON.stringify(card)],
   );
 }

@@ -64,3 +64,8 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS ip_key text;
 --   'lk:<YYYY-MM-DDTHH>:g' and 'lk:<hour>:ip:<hash>'  GitHub lookups a UTC hour, global and per IP;
 --   'an:<YYYY-MM-DD>:ip:<hash>'                        live analyses a UTC day, per IP.
 -- Rows for past hours and days are purged by the code on later requests.
+
+-- Home-page gallery card (name, language, day, thumbnail rectangles; under 20 KB), so the home page lists
+-- live analyses without reading each row's analysis (up to 8 MB of jsonb). Written best-effort after the
+-- row; a NULL card is filled in by the home page (lib/db/cards.ts). Safe to apply before the code ships.
+ALTER TABLE analyses ADD COLUMN IF NOT EXISTS card jsonb;
