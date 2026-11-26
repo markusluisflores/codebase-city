@@ -209,19 +209,104 @@ describe('ViewerLoader', () => {
     expect(fetchMock.mock.calls[0]?.[0] as string).toBe('/api/analysis/octo/repo');
   });
 
-  it('shows a not-analysed state with a link home on 404', async () => {
-    vi.stubGlobal('fetch', () =>
-      Promise.resolve(
-        Response.json({ error: 'analysis_not_found', message: 'x' }, { status: 404 }),
-      ),
+  const readyFetch = (unlocked: boolean, analysedAt: () => string) => (url: string) =>
+    Promise.resolve(
+      url === '/api/session'
+        ? Response.json(
+            unlocked
+              ? { unlocked: true, expiresAt: '2026-12-02T09:00:00.000Z' }
+              : { unlocked: false },
+          )
+        : Response.json({ source: 'live', analysedAt: analysedAt(), analysis }),
     );
+
+  it('shows "Check for new commits" under the bar to an unlocked visitor on a live analysis', async () => {
+    vi.stubGlobal(
+      'fetch',
+      readyFetch(true, () => '2026-11-03T10:00:00.000Z'),
+    );
+    render(<ViewerLoader owner="octo" repo="repo" />);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Check for new commits' })).toBeTruthy(),
+    );
+  });
+
+  it('shows no re-analyse control to a locked visitor', async () => {
+    vi.stubGlobal(
+      'fetch',
+      readyFetch(false, () => '2026-11-03T10:00:00.000Z'),
+    );
+    render(<ViewerLoader owner="octo" repo="repo" />);
+    await waitFor(() => expect(screen.getByTestId('city')).toBeTruthy());
+    expect(screen.queryByRole('button', { name: 'Check for new commits' })).toBeNull();
+  });
+
+  it('says the copy may be stale when a re-analysis finished but the reload returned the old analysis', async () => {
+    const JOB = '11111111-1111-4111-8111-111111111111';
+    const base = readyFetch(true, () => '2026-11-03T10:00:00.000Z');
+    vi.stubGlobal('fetch', (url: string) => {
+      if (url === '/api/analyze') return Promise.resolve(Response.json({ status: 'job', id: JOB }));
+      if (url === `/api/jobs/${JOB}`)
+        return Promise.resolve(Response.json({ phase: 'done', errorCode: null, message: null }));
+      return base(url);
+    });
+    render(<ViewerLoader owner="octo" repo="repo" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Check for new commits' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Check and re-analyse' }));
+    await waitFor(() => expect(screen.getByText(/may show the previous one/i)).toBeTruthy());
+    expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy();
+  });
+
+  it('shows no stale note when the reload returns a newer analysis', async () => {
+    const JOB = '11111111-1111-4111-8111-111111111111';
+    let stamp = '2026-11-03T10:00:00.000Z';
+    const base = readyFetch(true, () => stamp);
+    vi.stubGlobal('fetch', (url: string) => {
+      if (url === '/api/analyze') return Promise.resolve(Response.json({ status: 'job', id: JOB }));
+      if (url === `/api/jobs/${JOB}`) {
+        stamp = '2026-11-25T10:00:00.000Z';
+        return Promise.resolve(Response.json({ phase: 'done', errorCode: null, message: null }));
+      }
+      return base(url);
+    });
+    render(<ViewerLoader owner="octo" repo="repo" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Check for new commits' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Check and re-analyse' }));
+    await waitFor(() => expect(screen.getByText(/25 nov|2026-11-25/i)).toBeTruthy());
+    expect(screen.queryByText(/may show the previous one/i)).toBeNull();
+  });
+
+  const notFoundFetch = (unlocked: boolean) => (url: string) =>
+    Promise.resolve(
+      url === '/api/session'
+        ? Response.json(
+            unlocked
+              ? { unlocked: true, expiresAt: '2026-12-02T09:00:00.000Z' }
+              : { unlocked: false },
+          )
+        : Response.json({ error: 'analysis_not_found', message: 'x' }, { status: 404 }),
+    );
+
+  it('shows a not-analysed state with a link home, asking only for the password when locked', async () => {
+    vi.stubGlobal('fetch', notFoundFetch(false));
     render(<ViewerLoader owner="octo" repo="repo" />);
     await waitFor(() => expect(screen.getByText(/not analysed yet/i)).toBeTruthy());
     expect(screen.getByRole('link', { name: /gallery/i }).getAttribute('href')).toBe('/');
-    // The uncached repo offers the analyse form, prefilled.
-    expect((screen.getByLabelText(/github repository/i) as HTMLInputElement).value).toBe(
-      'octo/repo',
+    // The repo is already known, so there is no repo field: one password field and one button.
+    expect(screen.getByLabelText(/demo password/i)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Unlock and analyse' })).toBeTruthy();
+    expect(screen.queryByLabelText(/github repository/i)).toBeNull();
+  });
+
+  it('offers the prefilled analyse form on a not-analysed repo when already unlocked', async () => {
+    vi.stubGlobal('fetch', notFoundFetch(true));
+    render(<ViewerLoader owner="octo" repo="repo" />);
+    await waitFor(() =>
+      expect((screen.getByLabelText(/github repository/i) as HTMLInputElement).value).toBe(
+        'octo/repo',
+      ),
     );
+    expect(screen.queryByLabelText(/demo password/i)).toBeNull();
   });
 
   it('shows a loading status first, and an error message on failure', async () => {

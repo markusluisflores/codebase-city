@@ -23,7 +23,25 @@
   border: 0;
   border-radius: 6px;
   padding: 6px 14px;
+  min-height: 44px;
   cursor: pointer;
+}
+
+/* The quieter of two actions side by side (Cancel, Reload). */
+.secondaryButton {
+  font: inherit;
+  font-weight: 500;
+  color: var(--text);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.secondaryButton:hover {
+  border-color: var(--accent);
 }
 
 .button:disabled {
@@ -117,6 +135,8 @@
   flex: 1;
   min-width: 0;
   font: inherit;
+  font-size: 16px; /* below 16px iOS Safari zooms the page when the field takes focus */
+  min-height: 44px;
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--border);
@@ -168,5 +188,123 @@
   }
   .skelSide {
     display: none;
+  }
+}
+
+/* Password panel and the locked/unlocked entry (AnalyseGate) */
+.unlock {
+  display: grid;
+  gap: 10px;
+  max-width: 34em;
+}
+
+.unlock p {
+  margin: 0;
+}
+
+.unlock label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.gate {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  max-width: 34em;
+  margin: 0 0 48px;
+}
+
+.gate > * {
+  width: 100%;
+}
+
+.gate .form {
+  margin: 0;
+}
+
+.lockButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 14px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.lockButton:hover,
+.lockButton[aria-expanded='true'] {
+  border-color: var(--accent);
+}
+
+/* `.gate p.…` outranks the home page's `.hero p` (larger text, big bottom margin). */
+.gate p.gateNote {
+  margin: 0;
+  max-width: none;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.gate p.unlockedBar {
+  max-width: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.linkButton {
+  font: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  padding: 10px 6px;
+  min-height: 44px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.statusLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 14px;
+}
+
+.statusLine p {
+  margin: 0;
+}
+
+.noteInline {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.disclosure {
+  display: grid;
+  gap: 10px;
+  max-width: 34em;
+}
+
+.disclosure p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+@media (max-width: 480px) {
+  .row {
+    flex-direction: column;
   }
 }

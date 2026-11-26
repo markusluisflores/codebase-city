@@ -3,9 +3,10 @@
 .shell {
   display: grid;
   grid-template-columns: 290px minmax(0, 1fr) 310px;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   grid-template-areas:
     'bar bar bar'
+    'strip strip strip'
     'left canvas right';
   height: 100dvh;
 }
@@ -18,6 +19,23 @@
   padding: 10px 16px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+}
+
+/* The re-analyse row under the bar. Empty (no element) for visitors who cannot re-analyse. */
+.strip {
+  grid-area: strip;
+  display: grid;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.stripRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
 }
 
 .brand {
@@ -468,8 +486,10 @@
 @media (max-width: 760px) {
   .shell {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
     grid-template-areas:
       'bar'
+      'strip'
       'canvas';
   }
 

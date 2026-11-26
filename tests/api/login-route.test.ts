@@ -25,9 +25,9 @@ const login = (password: string, ip = '203.0.113.9') =>
   );
 
 describe('POST /api/session wired to the Postgres attempt store', () => {
-  it('runs on the Node runtime and exports only POST', () => {
+  it('runs on the Node runtime and exports only POST (log in), GET (own status) and DELETE (lock)', () => {
     expect(sessionRoute.runtime).toBe('nodejs');
-    expect(Object.keys(sessionRoute).sort()).toEqual(['POST', 'runtime']);
+    expect(Object.keys(sessionRoute).sort()).toEqual(['DELETE', 'GET', 'POST', 'runtime']);
   });
 
   it('accepts the right password and sets the cookie', async () => {

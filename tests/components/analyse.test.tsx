@@ -197,6 +197,16 @@ describe('AnalyseForm', () => {
     });
   });
 
+  it('shows how many analyses are left today when the server says so', async () => {
+    handler = (url) =>
+      url === '/api/analyze'
+        ? json({ status: 'job', id: '11111111-1111-4111-8111-111111111111', analysesLeft: 1 })
+        : json({ phase: 'queued' });
+    render(<AnalyseForm />);
+    await submit();
+    expect(screen.getByText('1 analysis left today')).toBeTruthy();
+  });
+
   it('keeps polling through a 503 and an unreadable reply, then finishes', async () => {
     let n = 0;
     handler = (url) => {

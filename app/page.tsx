@@ -1,4 +1,4 @@
-import { AnalyseForm } from '@/components/AnalyseForm';
+import { AnalyseGate } from '@/components/AnalyseGate';
 import { GalleryGrid } from '@/components/GalleryGrid';
 import s from '@/components/gallery.module.css';
 import { loadHomeCards } from '@/lib/home-gallery';
@@ -17,7 +17,7 @@ export default async function Home() {
           Codebase <span>City</span>
         </h1>
         <p>See any repo as a city. Find the files to read first.</p>
-        <AnalyseForm />
+        <AnalyseGate />
       </section>
       <section aria-labelledby="gallery-heading">
         <h2 id="gallery-heading" className={s.heading}>
