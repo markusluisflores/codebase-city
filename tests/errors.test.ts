@@ -5,6 +5,7 @@ import {
   errorStatus,
   GATE_CODES,
   JOB_REPORTED_CODES,
+  LIMIT_CODES,
   QUOTA_CODES,
   SANDBOX_CODES,
   type ErrorCode,
@@ -46,6 +47,15 @@ const SPEC_11: Record<string, string> = {
   too_many_attempts: 'Too many attempts. Wait a minute and try again.',
 };
 
+describe('limit codes', () => {
+  it('are 429s with fixed messages that state no number and no IP', () => {
+    for (const code of LIMIT_CODES) {
+      expect(errorStatus(code)).toBe(429);
+      expect(errorMessage(code)).not.toMatch(/\d/);
+    }
+  });
+});
+
 describe('errorMessage', () => {
   it('returns the exact spec section 11 message for each of its codes', () => {
     for (const [code, msg] of Object.entries(SPEC_11)) expect(errorMessage(code)).toBe(msg);
@@ -61,6 +71,7 @@ describe('errorMessage', () => {
       ...CAP_ERROR_CODES,
       ...SANDBOX_CODES,
       ...QUOTA_CODES,
+      ...LIMIT_CODES,
       ...GATE_CODES,
     ];
     for (const code of all) {

@@ -9,7 +9,8 @@ import { readGallery } from '@/lib/gallery';
 import { checkCaps, fetchRepoFacts, GitHubError, type RepoFacts } from '@/lib/repo/github';
 import { parseRepoInput } from '@/lib/repo/url';
 import { runAnalysisInSandbox, SandboxError, type RunnerDeps } from '@/lib/sandbox/run';
-import { requireSession } from '@/lib/session';
+import { ipLimitKey, secondsToNextUtcDay, takeLookup } from '@/lib/db/limits';
+import { assertSessionConfig, clientIp, requireSession } from '@/lib/session';
 import { apiError, apiJson } from './response';
 
 export interface AnalyzeDeps {
@@ -50,9 +51,10 @@ async function readRepoInput(req: Request): Promise<{ owner: string; name: strin
 }
 
 /**
- * POST /api/analyze (spec section 6). Order: session, content type and body, gallery, GitHub facts,
- * cache hit on the same head SHA, caps, job create-or-reuse (which reserves quota only for a new job),
- * then the long work in the background. Every failure is a fixed code.
+ * POST /api/analyze (spec section 6). Order: session, content type and body, gallery, lookup limit (per
+ * IP and global, taken before anything is spent), GitHub facts, cache hit on the same head SHA, caps,
+ * job create-or-reuse (which reserves the per-IP and global quota only for a new job), then the long
+ * work in the background. Every failure is a fixed code; the limit codes carry a `Retry-After`.
  */
 export async function handleAnalyze(req: Request, deps: AnalyzeDeps = {}): Promise<Response> {
   const denied = await requireSession(req, deps.env);
@@ -75,6 +77,18 @@ export async function handleAnalyze(req: Request, deps: AnalyzeDeps = {}): Promi
     });
   }
 
+  // Limits key on the hashed client IP: the session cookie is a timestamp anyone with the password can
+  // mint again, so it cannot identify a holder. A throw denies (fail closed) before GitHub is called.
+  let ipKey: string;
+  try {
+    ipKey = ipLimitKey(assertSessionConfig(deps.env ?? process.env).secret, clientIp(req.headers));
+    const lookup = await takeLookup(ipKey, now());
+    if (!lookup.ok) return apiError('lookup_limit', { 'retry-after': String(lookup.retryAfterS) });
+  } catch {
+    logCode('limit_failed', 'db_unavailable');
+    return apiError('db_unavailable');
+  }
+
   let facts: RepoFacts;
   try {
     facts = await (deps.fetchFacts ?? ((o, n) => fetchRepoFacts(o, n)))(parsed.owner, parsed.name);
@@ -86,6 +100,7 @@ export async function handleAnalyze(req: Request, deps: AnalyzeDeps = {}): Promi
   const repoLabel = `${facts.owner}/${facts.name}`;
 
   let jobId: string;
+  let analysesLeft: number | undefined;
   try {
     const cached = await getCached(facts.owner, facts.name, SCHEMA_VERSION);
     if (cached && cached.analysis.repo.headSha === facts.headSha) {
@@ -102,15 +117,19 @@ export async function handleAnalyze(req: Request, deps: AnalyzeDeps = {}): Promi
     const caps = checkCaps(facts);
     if (!caps.ok) return apiError(caps.code);
 
-    const job = await createOrReuseJob(facts.owner, facts.name, now());
+    const job = await createOrReuseJob(facts.owner, facts.name, now(), ipKey);
     if (job.reused) return apiJson({ status: 'job', id: job.id });
     const created = await getJob(job.id, now());
     if (created?.phase === 'failed') {
-      // A refused reservation (daily or monthly), or a row failed in between.
+      // A refused reservation (per IP, daily or monthly), or a row failed in between.
       const code = created.errorCode;
+      if (code === 'analysis_limit') {
+        return apiError(code, { 'retry-after': String(secondsToNextUtcDay(now())) });
+      }
       return apiError(isErrorCode(code) ? code : 'internal_error');
     }
     jobId = job.id;
+    analysesLeft = job.analysesLeft;
   } catch {
     logCode('db_failed', 'db_unavailable', repoLabel);
     return apiError('db_unavailable');
@@ -124,7 +143,11 @@ export async function handleAnalyze(req: Request, deps: AnalyzeDeps = {}): Promi
     logCode('schedule_failed', 'internal_error', repoLabel);
     return apiError('internal_error');
   }
-  return apiJson({ status: 'job', id: jobId });
+  return apiJson({
+    status: 'job',
+    id: jobId,
+    ...(analysesLeft === undefined ? {} : { analysesLeft }),
+  });
 }
 
 /**

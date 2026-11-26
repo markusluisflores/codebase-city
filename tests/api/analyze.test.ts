@@ -74,7 +74,7 @@ const drain = async (h: Harness) => {
 
 async function counters(): Promise<Record<string, number>> {
   const r = await t.pg.query<{ period: string; count: number }>(
-    'SELECT period, count FROM usage_counters',
+    "SELECT period, count FROM usage_counters WHERE period ~ '^[dm]:'",
   );
   return Object.fromEntries(r.rows.map((x) => [x.period, x.count]));
 }
@@ -234,12 +234,17 @@ describe('caps and GitHub errors (nothing reserved, nothing started)', () => {
     const h = harness();
     for (let i = 0; i < 10; i++) {
       h.fetchFacts.mockResolvedValue(facts({ name: `r${i}` }));
+      // A different client IP each time: the per-IP limit has its own tests (analyze-limits.test.ts).
+      const ip = { 'x-vercel-forwarded-for': `198.51.100.${i}` };
       expect(
-        (await (await handleAnalyze(await post({ repo: `octo/r${i}` }), h.deps)).json()).status,
+        (await (await handleAnalyze(await post({ repo: `octo/r${i}` }, ip), h.deps)).json()).status,
       ).toBe('job');
     }
     h.fetchFacts.mockResolvedValue(facts({ name: 'eleventh' }));
-    const res = await handleAnalyze(await post({ repo: 'octo/eleventh' }), h.deps);
+    const res = await handleAnalyze(
+      await post({ repo: 'octo/eleventh' }, { 'x-vercel-forwarded-for': '198.51.100.99' }),
+      h.deps,
+    );
     expect(res.status).toBe(429);
     expect((await res.json()).error).toBe('daily');
     expect(h.sandbox.created).toHaveLength(0);
@@ -251,7 +256,7 @@ describe('job lifecycle', () => {
     const h = harness();
     const a = await (await handleAnalyze(await post({ repo: 'octo/repo' }), h.deps)).json();
     const b = await (await handleAnalyze(await post({ repo: 'OCTO/REPO' }), h.deps)).json();
-    expect(b).toEqual(a);
+    expect(b).toEqual({ status: 'job', id: a.id }); // the reuser gets no analysesLeft: it took no unit
     expect(await unit()).toBe(1);
     expect(h.work).toHaveLength(1); // only the creator schedules work
     await drain(h);

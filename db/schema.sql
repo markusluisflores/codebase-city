@@ -51,6 +51,20 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 CREATE INDEX IF NOT EXISTS login_attempts_ip_ts ON login_attempts (ip_hash, ts);
 CREATE INDEX IF NOT EXISTS login_attempts_ts ON login_attempts (ts);
 
+-- Analyze limits (feat/analyze-session-limit). Run this BEFORE deploying the code that uses it: the new
+-- code inserts `ip_key`, so without the column live analysis fails closed with `db_unavailable`
+-- (gallery and cached results keep working). Old code ignores the column, so running it early is safe.
+-- `ip_key` is HMAC(SESSION_SECRET, 'limit-ip:' || ip) as hex, never the raw IP; it lets a failure before
+-- the Sandbox exists give back the per-IP unit as well as the global one. It is set to NULL as soon as the
+-- job is done or failed, so a finished row keeps no visitor hash. Retention of the hash that remains:
+-- the 'lk:' counters hold it up to one UTC hour and the 'an:' counters up to one UTC day (both purged
+-- by the next request after they expire).
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS ip_key text;
+-- The new limits store their counters in usage_counters with these period keys (no new table):
+--   'lk:<YYYY-MM-DDTHH>:g' and 'lk:<hour>:ip:<hash>'  GitHub lookups a UTC hour, global and per IP;
+--   'an:<YYYY-MM-DD>:ip:<hash>'                        live analyses a UTC day, per IP.
+-- Rows for past hours and days are purged by the code on later requests.
+
 -- Home-page gallery card (name, language, day, thumbnail rectangles; under 20 KB), so the home page lists
 -- live analyses without reading each row's analysis (up to 8 MB of jsonb). Written best-effort after the
 -- row; a NULL card is filled in by the home page (lib/db/cards.ts). Safe to apply before the code ships.

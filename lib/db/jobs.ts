@@ -1,5 +1,5 @@
 import { getDb } from './client';
-import { releaseQuota, reserveQuota, utcDay } from './limits';
+import { releaseIpAnalysis, releaseQuota, reserveQuota, takeIpAnalysis, utcDay } from './limits';
 
 export type JobPhase = 'queued' | 'cloning' | 'reading_history' | 'computing' | 'done' | 'failed';
 
@@ -67,21 +67,28 @@ async function failJob(
 ): Promise<boolean> {
   const rows = await getDb().query(
     `WITH old AS (
-       SELECT id, reserved, reserved_on, sandbox_started FROM jobs
+       SELECT id, reserved, reserved_on, sandbox_started, ip_key FROM jobs
         WHERE id = $1 AND phase NOT IN ('done', 'failed')
           FOR UPDATE
      ),
      upd AS (
-       UPDATE jobs j SET phase = 'failed', error_code = $2, reserved = false
+       UPDATE jobs j SET phase = 'failed', error_code = $2, reserved = false, ip_key = NULL
          FROM old WHERE j.id = old.id
        RETURNING j.id, old.reserved AS was_reserved, old.reserved_on AS day,
-                 old.sandbox_started AS started
+                 old.sandbox_started AS started, old.ip_key AS ip
      ),
      rel AS (
        UPDATE usage_counters c SET count = GREATEST(c.count - 1, 0)
          FROM upd
         WHERE (upd.was_reserved OR $3::boolean) AND NOT upd.started AND NOT $4::boolean
           AND c.period IN ('d:' || upd.day, 'm:' || substr(upd.day, 1, 7))
+       RETURNING 1
+     ),
+     rel_ip AS (
+       UPDATE usage_counters c SET count = GREATEST(c.count - 1, 0)
+         FROM upd
+        WHERE (upd.was_reserved OR $3::boolean) AND NOT upd.started AND NOT $4::boolean
+          AND upd.ip IS NOT NULL AND c.period = 'an:' || upd.day || ':ip:' || upd.ip
        RETURNING 1
      )
      SELECT id FROM upd`,
@@ -102,17 +109,20 @@ async function findActive(owner: string, name: string): Promise<{ id: string } |
  * Starts a job for the repo, or reuses the one already in flight. Steps, in order:
  * 1. sweep: a non-terminal row for this repo older than 5 minutes is failed `timeout` (its unit
  *    released if it held one) so it is never reused;
- * 2. insert a new row; the unique partial index on `(owner, name)` over non-terminal rows means a
- *    concurrent loser gets nothing back and re-reads and reuses the winner's id, reserving nothing;
- * 3. only the creator reserves quota. If the reservation is refused the new row is failed with the
- *    quota code (`daily` or `monthly`) before returning, so no unreserved non-terminal row survives;
- *    the caller reads that code with `getJob`.
+ * 2. insert a new row (carrying the caller's hashed IP, if given); the unique partial index on
+ *    `(owner, name)` over non-terminal rows means a concurrent loser gets nothing back and re-reads and
+ *    reuses the winner's id, reserving nothing;
+ * 3. only the creator reserves quota: the caller's per-IP daily unit first (code `analysis_limit`), then
+ *    the global daily and monthly units. A refusal fails the new row with its code before returning, so
+ *    no unreserved non-terminal row survives; the caller reads that code with `getJob`. A global refusal
+ *    gives the per-IP unit back. `analysesLeft` is what the IP has left today after this job.
  */
 export async function createOrReuseJob(
   owner: string,
   name: string,
   now: Date,
-): Promise<{ id: string; reused: boolean }> {
+  ipKey?: string,
+): Promise<{ id: string; reused: boolean; analysesLeft?: number }> {
   const db = getDb();
   const o = keyPart(owner);
   const n = keyPart(name);
@@ -129,11 +139,11 @@ export async function createOrReuseJob(
   for (let attempt = 0; attempt < 3; attempt++) {
     const id = crypto.randomUUID();
     const inserted = await db.query<{ id: string }>(
-      `INSERT INTO jobs (id, owner, name, phase, reserved, reserved_on, created_at)
-       VALUES ($1, $2, $3, 'queued', false, $4, $5)
+      `INSERT INTO jobs (id, owner, name, phase, reserved, reserved_on, created_at, ip_key)
+       VALUES ($1, $2, $3, 'queued', false, $4, $5, $6)
        ON CONFLICT (owner, name) WHERE phase NOT IN ('done', 'failed') DO NOTHING
        RETURNING id`,
-      [id, o, n, utcDay(now), now.toISOString()],
+      [id, o, n, utcDay(now), now.toISOString(), ipKey ?? null],
     );
     if (inserted.length === 0) {
       const active = await findActive(o, n);
@@ -141,15 +151,41 @@ export async function createOrReuseJob(
       continue;
     }
 
+    // The per-IP unit is taken first and tracked here until the job row owns it (`reserved = true`).
+    let analysesLeft: number | undefined;
+    let ipUnitTaken = false;
+    const giveIpBack = (): Promise<void> =>
+      ipUnitTaken && ipKey
+        ? releaseIpAnalysis(utcDay(now), ipKey).catch(() => undefined)
+        : Promise.resolve();
+    if (ipKey) {
+      let ip: Awaited<ReturnType<typeof takeIpAnalysis>>;
+      try {
+        ip = await takeIpAnalysis(ipKey, now);
+      } catch (err) {
+        await failJob(id, 'db_write_failed').catch(() => undefined);
+        throw err;
+      }
+      if (!ip.ok) {
+        await failJob(id, 'analysis_limit');
+        return { id, reused: false };
+      }
+      ipUnitTaken = true;
+      analysesLeft = ip.left;
+    }
+
     let reservation: Awaited<ReturnType<typeof reserveQuota>>;
     try {
       reservation = await reserveQuota(now);
     } catch (err) {
       // Never leave an unreserved non-terminal row that blocks the repo for five minutes.
+      // The per-IP unit goes back first: if the failing statement throws too, the unit is not stranded.
+      await giveIpBack();
       await failJob(id, 'db_write_failed');
       throw err;
     }
     if (!reservation.ok) {
+      await giveIpBack();
       await failJob(id, reservation.reason);
       return { id, reused: false };
     }
@@ -162,13 +198,17 @@ export async function createOrReuseJob(
     } catch (err) {
       // Do not leave a queued row that blocks the repo, and do not leak the unit just taken.
       // A throw does not prove the update did not commit (a lost response), so the one failing
-      // statement decides: it releases the unit whether or not the mark landed, exactly once.
+      // statement decides: it releases the unit whether or not the mark landed, exactly once
+      // (the global units and, through the row's `ip_key`, the per-IP one).
       await failJob(id, 'db_write_failed', true).catch(() => undefined);
       throw err;
     }
-    // The row was failed in between (for example swept): hand the unit back, nothing holds it.
-    if (marked.length === 0) await releaseQuota(utcDay(now));
-    return { id, reused: false };
+    // The row was failed in between (for example swept): hand the units back, nothing holds them.
+    if (marked.length === 0) {
+      await giveIpBack(); // first: a throwing releaseQuota must not strand the per-IP unit
+      await releaseQuota(utcDay(now));
+    }
+    return { id, reused: false, ...(analysesLeft === undefined ? {} : { analysesLeft }) };
   }
   throw new Error('could not create or reuse a job');
 }
@@ -188,9 +228,11 @@ export async function setJobPhase(
     await failJob(id, errorCode ?? 'unknown', false, opts.keepQuota === true);
     return;
   }
+  // The hashed IP is only needed to refund the per-IP unit, so a job that finishes drops it (`failJob`
+  // does the same): rows must not keep a visitor-hash-to-repo link after the run is over.
   // Phases only move forward: a late or duplicate update cannot regress a live job.
   await getDb().query(
-    `UPDATE jobs SET phase = $2
+    `UPDATE jobs SET phase = $2, ip_key = CASE WHEN $2 = 'done' THEN NULL ELSE ip_key END
       WHERE id = $1 AND phase NOT IN ('done', 'failed')
         AND array_position($3::text[], phase) < array_position($3::text[], $2)`,
     [id, phase, FORWARD_ORDER],

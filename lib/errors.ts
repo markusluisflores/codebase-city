@@ -36,6 +36,8 @@ export const JOB_REPORTED_CODES = SANDBOX_CODES.filter(
 );
 /** Quota refusals from `reserveQuota` (`lib/db/limits.ts`). */
 export const QUOTA_CODES = ['daily', 'monthly'] as const;
+/** Per-IP and global analyze limits (`lib/db/limits.ts`): GitHub lookups an hour, live analyses a day. */
+export const LIMIT_CODES = ['lookup_limit', 'analysis_limit'] as const;
 /** Codes the password gate and the session check return (`lib/login.ts`, `lib/session.ts`). */
 export const GATE_CODES = [
   'wrong_password',
@@ -62,6 +64,7 @@ export type ErrorCode =
   | (typeof CAP_CODES)[number]
   | (typeof SANDBOX_CODES)[number]
   | (typeof QUOTA_CODES)[number]
+  | (typeof LIMIT_CODES)[number]
   | (typeof GATE_CODES)[number]
   | (typeof API_CODES)[number];
 
@@ -90,6 +93,10 @@ const MESSAGES: Record<ErrorCode, string> = {
   daily: 'The daily demo limit has been reached. Please try again tomorrow (UTC).',
   monthly: 'The monthly demo limit has been reached. Please try again next month.',
   db_write_failed: "The analysis finished but we couldn't save it. Please try again later.",
+  lookup_limit:
+    'Too many repositories have been checked recently. Please try again in a little while.',
+  analysis_limit:
+    'This connection has reached its daily limit for live analyses. Please try again tomorrow (UTC).',
   wrong_password: 'That password is not correct.',
   too_many_attempts: 'Too many attempts. Wait a minute and try again.',
 
@@ -139,6 +146,8 @@ export function errorStatus(code: ErrorCode): number {
       return 422;
     case 'daily':
     case 'monthly':
+    case 'lookup_limit':
+    case 'analysis_limit':
     case 'github_rate_limited':
     case 'too_many_attempts':
       return 429;
