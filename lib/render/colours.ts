@@ -26,15 +26,19 @@ export const TOKENS = {
 /** Neutral grey: no activity in the window (or too little data for the mode). */
 export const COLD = TOKENS.cold;
 
-/** Sequential ramp, cold to hot (7 stops, inferno-like). Used by hotspot, churn, age and bug-fix. */
+/**
+ * Sequential ramp, cold to hot (7 stops, inferno-like). Used by hotspot, churn, age and bug-fix.
+ * The cold end is lifted (decided 2026-11-26): the first stop is 2.1:1 and the second 3.1:1 against the
+ * floor plate, so low-activity buildings stay visible; adjacent luminance gaps are 0.059 to 0.24.
+ */
 export const SEQUENTIAL: readonly string[] = [
-  '#280b54',
-  '#65156e',
-  '#9f2a63',
-  '#d44842',
-  '#f57d15',
-  '#fac127',
-  '#fcffa4',
+  '#8c2367',
+  '#b83854',
+  '#dc5537',
+  '#f57c16',
+  '#f9ad22',
+  '#fbd956',
+  '#fcffa3',
 ];
 
 /**
@@ -52,8 +56,11 @@ export const AUTHOR_COLOURS: readonly string[] = [
   '#F5F5F5',
 ];
 
-/** Okabe-Ito grey, for "others" (languages beyond 7, authors beyond 8). Differs from `COLD`. */
-export const OTHERS = '#999999';
+/**
+ * Light grey for "others" (languages beyond 7, authors beyond 8). Differs from `COLD`. Lighter than
+ * Okabe-Ito's #999999 (decided 2026-11-26), which was nearly the same as the pink for deuteranopia.
+ */
+export const OTHERS = '#bdbdbd';
 
 export const MAX_LANGUAGES = 7;
 export const MAX_OWNERS = 8;
