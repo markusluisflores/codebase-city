@@ -124,9 +124,10 @@ const oklab = ([r, g, b]: number[]): number[] => {
     0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
   ];
 };
-type Vision = 'protanopia' | 'deuteranopia' | 'tritanopia' | 'achromatopsia';
+type Vision = 'normal' | 'protanopia' | 'deuteranopia' | 'tritanopia' | 'achromatopsia';
 const seen = (hex: string, kind: Vision): number[] => {
   const c = toLinear(hex);
+  if (kind === 'normal') return c;
   if (kind === 'achromatopsia') {
     const y = 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
     return [y, y, y];
@@ -143,6 +144,11 @@ describe('the two greys', () => {
   it('"others" is at least 2:1 lighter than the no-activity grey', () => {
     const ratio = (relativeLuminance(OTHERS) + 0.05) / (relativeLuminance(COLD) + 0.05);
     expect(ratio).toBeGreaterThanOrEqual(2);
+  });
+  // Normal vision: #bdbdbd sits next to the near-white 8th author colour (lightness ratio only 1.7:1),
+  // so the plain colour distance must stay clear too (floor 8, the dataviz target).
+  it('"others" stays at least 8 from every author colour with normal vision', () => {
+    for (const c of AUTHOR_COLOURS) expect(distance(OTHERS, c, 'normal')).toBeGreaterThanOrEqual(8);
   });
   // Floor of 5: the old #999999 was 1.9 away from the pink under deuteranopia and achromatopsia.
   for (const kind of ['protanopia', 'deuteranopia', 'tritanopia', 'achromatopsia'] as const) {
