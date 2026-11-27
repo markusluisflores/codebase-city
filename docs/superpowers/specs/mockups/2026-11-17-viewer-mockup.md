@@ -112,11 +112,11 @@ Rendered comparison: `docs/superpowers/specs/mockups/2026-11-17-viewer-palette.h
 
 | Option | Sequential ramp (cold to hot) | Accent | Verdict |
 | ------ | ----------------------------- | ------ | ------- |
-| A Night Ember ✅ CHOSEN | `#280b54 #65156e #9f2a63 #d44842 #f57d15 #fac127 #fcffa4` | `#fb923c` | Chosen: ramp stays legible on the dark background and reads as heat |
+| A Night Ember ✅ CHOSEN | `#8c2367 #b83854 #dc5537 #f57c16 #f9ad22 #fbd956 #fcffa3` (cold end lifted 2026-11-26, see PR 35; chosen as `#280b54 #65156e #9f2a63 #d44842 #f57d15 #fac127 #fcffa4`) | `#fb923c` | Chosen: ramp stays legible on the dark background and reads as heat |
 | B Deep Sea | `#482878 #3e4989 #26828e #1f9e89 #6ece58 #b5de2b #fde725` | `#2dd4bf` | Rejected: viridis-style, accessible, but cool tones do not say "hot" |
 | C Paper Heat | `#ffffb2 #fed976 #feb24c #fd8d3c #f03b20 #bd0026 #800026` | `#f87171` on dark | Rejected: weak on dark, the darkest reds sink into the background |
 
-Categorical palette (language and ownership modes), Okabe-Ito, colour-blind safe: `#E69F00 #56B4E9 #009E73 #F0E442 #0072B2 #D55E00 #CC79A7 #999999`.
+Categorical palette (language and ownership modes), Okabe-Ito, colour-blind safe: `#E69F00 #56B4E9 #009E73 #F0E442 #0072B2 #D55E00 #CC79A7 #bdbdbd` (the 8th, "others" grey, was `#999999` until 2026-11-26, see PR 35).
 
 ## 4. Fonts
 

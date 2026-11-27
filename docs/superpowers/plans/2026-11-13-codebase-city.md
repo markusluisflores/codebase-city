@@ -278,7 +278,7 @@ Needs a Vercel account and a Marketplace Postgres; Markus creates them and suppl
 - [ ] **Step 2:** Implement; check by hand and record: touch (orbit, pinch-zoom and tap-to-select work on a phone or emulator), keyboard-only use, reduced-motion setting, and focus visibility. The colour-blind-safe palettes are checked by the luminance test plus a visual pass through a colour-vision simulator.
 - [ ] **Step 3:** Run `pre-pr-review` and open the `feat/viewer` PR; commit `feat(viewer): add arcs, states and accessibility`.
 
-**As built:** arcs are drawn inside the Three.js scene (`lib/render/arcs.ts`, `setArcs` on the scene), so there is no `ArcLayer.tsx`; the sequential-legend luminance test uses a minimum adjacent gap of 0.03, not 0.1 (the approved ramp's gaps run from 0.031 to 0.363; `tests/a11y.test.ts`). Both were decided during the build and are listed in `docs/project-reviewer.md`.
+**As built:** arcs are drawn inside the Three.js scene (`lib/render/arcs.ts`, `setArcs` on the scene), so there is no `ArcLayer.tsx`; the sequential-legend luminance test uses a minimum adjacent gap of 0.03, not 0.1 (the approved ramp's gaps run from 0.031 to 0.363; `tests/a11y.test.ts`). Since 2026-11-26 (PR 35) the ramp's cold end is lifted to `#8c2367 #b83854 #dc5537 #f57c16 #f9ad22 #fbd956 #fcffa3`, the gap is 0.05 (new gaps 0.059 to 0.241), the dimmest stop of each ramp must be at least 2:1 against the floor, and the "others" grey is `#bdbdbd`. Both were decided during the build and are listed in `docs/project-reviewer.md`.
 
 ### Task 16: Gallery, deploy, packaging (`chore/ship-gallery`)
 
