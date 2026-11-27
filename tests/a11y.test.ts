@@ -67,6 +67,7 @@ describe('sequential legends', () => {
 });
 
 describe('cold end against the floor plate', () => {
+  // Age mode never uses stop 0 (its stalest bucket is SEQUENTIAL[1], 3.07:1), so its check is on that stop.
   const coldStop = (mode: ColourMode, direction: 1 | -1): string => {
     const stops = legendFor(mode).stops.filter(
       (s) => SEQUENTIAL.includes(s.colour) || AGE_COLOURS.includes(s.colour),
@@ -92,6 +93,16 @@ describe('cold end against the floor plate', () => {
 
 // Machado et al. 2009, severity 1.0, applied to linear RGB; distance is OKLab x 100.
 const MACHADO = {
+  protanopia: [
+    [0.152286, 1.052583, -0.204868],
+    [0.114503, 0.786281, 0.099216],
+    [-0.003882, -0.048116, 1.051998],
+  ],
+  tritanopia: [
+    [1.255528, -0.076749, -0.178779],
+    [-0.078411, 0.930809, 0.147602],
+    [0.004733, 0.691367, 0.3039],
+  ],
   deuteranopia: [
     [0.367322, 0.860646, -0.227968],
     [0.280085, 0.672501, 0.047413],
@@ -113,7 +124,8 @@ const oklab = ([r, g, b]: number[]): number[] => {
     0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
   ];
 };
-const seen = (hex: string, kind: 'deuteranopia' | 'achromatopsia'): number[] => {
+type Vision = 'protanopia' | 'deuteranopia' | 'tritanopia' | 'achromatopsia';
+const seen = (hex: string, kind: Vision): number[] => {
   const c = toLinear(hex);
   if (kind === 'achromatopsia') {
     const y = 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
@@ -121,7 +133,7 @@ const seen = (hex: string, kind: 'deuteranopia' | 'achromatopsia'): number[] => 
   }
   return MACHADO[kind].map((row) => Math.min(1, row[0] * c[0]! + row[1] * c[1]! + row[2] * c[2]!));
 };
-const distance = (a: string, b: string, kind: 'deuteranopia' | 'achromatopsia'): number => {
+const distance = (a: string, b: string, kind: Vision): number => {
   const x = oklab(seen(a, kind));
   const y = oklab(seen(b, kind));
   return 100 * Math.hypot(x[0]! - y[0]!, x[1]! - y[1]!, x[2]! - y[2]!);
@@ -133,11 +145,22 @@ describe('the two greys', () => {
     expect(ratio).toBeGreaterThanOrEqual(2);
   });
   // Floor of 5: the old #999999 was 1.9 away from the pink under deuteranopia and achromatopsia.
-  for (const kind of ['deuteranopia', 'achromatopsia'] as const) {
+  for (const kind of ['protanopia', 'deuteranopia', 'tritanopia', 'achromatopsia'] as const) {
     it(`"others" stays at least 5 from every author colour under ${kind}`, () => {
       for (const c of AUTHOR_COLOURS) {
         expect(distance(OTHERS, c, kind)).toBeGreaterThanOrEqual(5);
       }
+    });
+  }
+});
+
+// Lifting the ramp moved its cold end next to the no-activity grey in lightness (about 1.7:1 against stop 0),
+// so hue has to separate them. Floor of 6 (the dataviz floor with a text label, and every legend stop has
+// one). Achromatopsia has no hue, so it is not checked here: the legend text carries the difference.
+describe('the no-activity grey against the ramp', () => {
+  for (const kind of ['protanopia', 'deuteranopia', 'tritanopia'] as const) {
+    it(`stays at least 6 from every ramp stop under ${kind}`, () => {
+      for (const c of SEQUENTIAL) expect(distance(COLD, c, kind)).toBeGreaterThanOrEqual(6);
     });
   }
 });
